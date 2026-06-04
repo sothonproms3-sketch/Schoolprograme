@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Moul&family=Kantomruy+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,600&display=swap');
+
+@theme {
+  --font-sans: "Kantomruy Pro", "Inter", system-ui, sans-serif;
+  --font-moul: "Moul", serif;
+  
+  --color-brand-red: #A13333;
+  --color-brand-blue: #1E3A8A;
+  --color-brand-gold: #D4AF37;
+  --color-brand-gold-dark: #B28B15;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #F8FAFC;
+  color: #1E293B;
+}
+
+/* Custom print layouts for certificates, reports, and grading tables */
+@media print {
+  body {
+    background-color: white !important;
+    color: black !important;
+    font-size: 12pt;
+  }
+  
+  /* Hide interactive margins, sidebars, buttons */
+  .no-print {
+    display: none !important;
+  }
+  
+  /* Keep print targets clean, centered, and padded */
+  .print-area {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  .print-page {
+    page-break-before: always;
+    page-break-inside: avoid;
+  }
+
+  .print-page:first-child {
+    page-break-before: avoid;
+  }
+}
+
+/* Elegant custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}

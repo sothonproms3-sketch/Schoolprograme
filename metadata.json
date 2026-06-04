@@ -1,0 +1,6 @@
+{
+  "name": "កម្មវិធីស្រង់ពិន្ទុបឋមសិក្សា",
+  "description": "កម្មវិធីគ្រប់គ្រងព័ត៌មានសិស្ស ស្រង់ពិន្ទុ តាមដានការសិក្សា និងរៀបចំតារាងកិត្តិយសសម្រាប់បឋមសិក្សា",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

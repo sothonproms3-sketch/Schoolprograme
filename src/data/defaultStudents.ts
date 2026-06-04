@@ -1,0 +1,130 @@
+import { Student } from '../types';
+
+export const DEFAULT_STUDENTS: Student[] = [
+  {
+    id: 'stud-1',
+    nameKh: 'សុខ រតនា',
+    nameEn: 'Sok Rotana',
+    gender: 'ប្រុស',
+    dob: '2015-05-12',
+    birthPlace: 'សង្កាត់បឹងកេងកង ភ្នំពេញ',
+    fatherName: 'សុខ គង់',
+    motherName: 'សេង ធារី',
+    phone: '012 345 678',
+    address: 'ផ្ទះលេខ ១២ ផ្លូវ ១០៥ ភ្នំពេញ',
+    conduct: 'ល្អណាស់',
+    remarks: 'សិស្សរៀនពូកែ មានភាពជាអ្នកដឹកនាំក្នុងថ្នាក់ និងឧស្សាហ៍ព្យាយាម។',
+    avatar: 'bg-blue-100 text-blue-700'
+  },
+  {
+    id: 'stud-2',
+    nameKh: 'ចាន់ ស្រីនី',
+    nameEn: 'Chan Sreyny',
+    gender: 'ស្រី',
+    dob: '2015-08-22',
+    birthPlace: 'ស្រុកគងពិសី ខេត្តកំពង់ស្ពឺ',
+    fatherName: 'ចាន់ ធារិទ្ធ',
+    motherName: 'ម៉ៅ សុខា',
+    phone: '098 765 432',
+    address: 'ភូមិព្រៃទទឹង ឃុំព្រៃទទឹង',
+    conduct: 'ល្អណាស់',
+    remarks: 'យកចិត្តទុកដាក់ខ្ពស់ក្នុងការស្តាប់ការពន្យល់ និងសរសេរអក្សរស្អាត។',
+    avatar: 'bg-pink-100 text-pink-700'
+  },
+  {
+    id: 'stud-3',
+    nameKh: 'គឹម ម៉េងស៊្រុន',
+    nameEn: 'Kim Mengsrun',
+    gender: 'ប្រុស',
+    dob: '2015-01-05',
+    birthPlace: 'ក្រុងតាខ្មៅ ខេត្តកណ្តាល',
+    fatherName: 'គឹម ហេង',
+    motherName: 'លឹម គីមយូរ',
+    phone: '011 223 344',
+    address: 'សង្កាត់តាខ្មៅ ក្រុងតាខ្មៅ',
+    conduct: 'ល្អ',
+    remarks: 'ពូកែខាងគណិតវិទ្យា និងធរណីមាត្រ ប៉ុន្តែត្រូវការអានបន្ថែម។',
+    avatar: 'bg-purple-100 text-purple-700'
+  },
+  {
+    id: 'stud-4',
+    nameKh: 'លី សូហ្វីយ៉ា',
+    nameEn: 'Ly Sophia',
+    gender: 'ស្រី',
+    dob: '2015-11-30',
+    birthPlace: 'សង្កាត់ទឹកល្អក់ ភ្នំពេញ',
+    fatherName: 'លី ហ៊្វូណា',
+    motherName: 'គង់ ស្រីមុំ',
+    phone: '015 889 900',
+    address: 'ផ្ទះលេខ ៤៥ ផ្លូវ ២៧១ ភ្នំពេញ',
+    conduct: 'ល្អណាស់',
+    remarks: 'មានវិន័យស្អាតស្អំ តែងតែជួយមិត្តភក្តិរួមថ្នាក់រៀនសូត្រ។',
+    avatar: 'bg-rose-100 text-rose-700'
+  },
+  {
+    id: 'stud-5',
+    nameKh: 'កែវ ពិសិដ្ឋ',
+    nameEn: 'Keo Piseth',
+    gender: 'ប្រុស',
+    dob: '2015-03-18',
+    birthPlace: 'ក្រុងកំពត ខេត្តកំពត',
+    fatherName: 'កែវ សុជា',
+    motherName: 'សេង ឡានី',
+    phone: '099 554 433',
+    address: 'ភូមិត្រពាំងធំ ក្រុងកំពត',
+    conduct: 'ល្អ',
+    remarks: 'ចូលចិត្តអភិវឌ្ឍន៍ជំនាញបច្ចេកទេស និងគំនូរបំណិនជីវិត។',
+    avatar: 'bg-emerald-100 text-emerald-700'
+  },
+  {
+    id: 'stud-6',
+    nameKh: 'សេង មុន្នីរ័ត្ន',
+    nameEn: 'Seng Moniroth',
+    gender: 'ស្រី',
+    dob: '2015-06-25',
+    birthPlace: 'ក្រុងកំពង់ចាម',
+    fatherName: 'សេង ហួរ',
+    motherName: 'ប៉ែន ស្រីលក្ខ',
+    phone: '077 665 544',
+    address: 'ភូមិ០៦ សង្កាត់វាលវង់ ក្រុងកំពង់ចាម',
+    conduct: 'ល្អ',
+    remarks: 'ចូលចិត្តសកម្មភាពកីឡា និងមានទំនាក់ទំនងល្អជាមួយគ្រូនិងមិត្ត។',
+    avatar: 'bg-teal-100 text-teal-700'
+  },
+  {
+    id: 'stud-7',
+    nameKh: 'យឹម ដានីញ៉ែល',
+    nameEn: 'Yim Daniel',
+    gender: 'ប្រុស',
+    dob: '2015-09-02',
+    birthPlace: 'ខណ្ឌចំការមន ភ្នំពេញ',
+    fatherName: 'យឹម វាសនា',
+    motherName: 'ថន ចរិយា',
+    phone: '085 456 123',
+    address: 'ផ្លូវព្រះនរោត្តម ភ្នំពេញ',
+    conduct: 'ល្អណាស់',
+    remarks: 'ពូកែភាសាបរទេស និងមុខវិជ្ជាសីលធម៌ពលរដ្ឋ រៀបចំឯកសារបានស្អាត។',
+    avatar: 'bg-amber-100 text-amber-700'
+  },
+  {
+    id: 'stud-8',
+    nameKh: 'ម៉ៅ សុភ័ក្ត្រ',
+    nameEn: 'Mao Sopheak',
+    gender: 'ប្រុស',
+    dob: '2015-04-14',
+    birthPlace: 'ក្រុងសៀមរាប',
+    fatherName: 'ម៉ៅ សាវ៉េត',
+    motherName: 'សាយ ពិសី',
+    phone: '081 772 233',
+    address: 'ភូមិសាលាកន្សែង សង្កាត់ស្វាយដង្គំ',
+    conduct: 'មធ្យម',
+    remarks: 'ឆ្លាត ប៉ុន្តែចូលចិត្តជជែកលេងច្រើនពេលរៀន។ ត្រូវការជំរុញការផ្តោតអារម្មណ៍។',
+    avatar: 'bg-indigo-100 text-indigo-700'
+  }
+];
+
+export const MONTH_NAMES = [
+  'មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា',
+  'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ',
+  'ឆមាសទី១', 'ឆមាសទី២', 'ប្រចាំឆ្នាំ'
+];
