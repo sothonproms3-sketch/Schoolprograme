@@ -101,11 +101,24 @@ export default function ReportCard({
   onUpdateScores,
   onUpdateStudent,
 }: ReportCardProps) {
-  const results = computeMonthlyResults(students, subjects, monthScores);
+  // Sort students alphabetically A-Z by nameEn stably
+  const sortedStudents = [...students].sort((a, b) => a.nameEn.localeCompare(b.nameEn, 'en', { sensitivity: 'base' }));
+
+  const results = computeMonthlyResults(sortedStudents, subjects, monthScores);
   
   const [selectedStudentId, setSelectedStudentId] = useState<string>(
-    students.length > 0 ? students[0].id : ''
+    sortedStudents.length > 0 ? sortedStudents[0].id : ''
   );
+
+  const [printMode, setPrintMode] = useState<'single' | 'all'>('single');
+
+  useEffect(() => {
+    const handleAfterPrint = () => {
+      setPrintMode('single');
+    };
+    window.addEventListener('afterprint', handleAfterPrint);
+    return () => window.removeEventListener('afterprint', handleAfterPrint);
+  }, []);
 
   const [commentInput, setCommentInput] = useState('');
   const [showPresetPanel, setShowPresetPanel] = useState(false);
@@ -143,10 +156,10 @@ export default function ReportCard({
 
   // Sync state if student changes
   useEffect(() => {
-    if (students.length > 0 && !selectedStudentId) {
-      setSelectedStudentId(students[0].id);
+    if (sortedStudents.length > 0 && !selectedStudentId) {
+      setSelectedStudentId(sortedStudents[0].id);
     }
-  }, [students, selectedStudentId]);
+  }, [sortedStudents, selectedStudentId]);
 
   useEffect(() => {
     if (activeScoreEntry) {
@@ -247,7 +260,17 @@ export default function ReportCard({
   };
 
   const printReportCard = () => {
-    window.print();
+    setPrintMode('single');
+    setTimeout(() => {
+      window.print();
+    }, 100);
+  };
+
+  const printAllReportCards = () => {
+    setPrintMode('all');
+    setTimeout(() => {
+      window.print();
+    }, 100);
   };
 
   const exportActiveStudentToExcel = () => {
@@ -631,7 +654,7 @@ export default function ReportCard({
               onChange={(e) => setSelectedStudentId(e.target.value)}
               className="px-3.5 py-2 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer min-w-[180px]"
             >
-              {students.map((s) => (
+              {sortedStudents.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.nameKh} ({s.gender === 'ស្រី' ? 'ស្រី' : 'ប្រុស'})
                 </option>
@@ -645,6 +668,15 @@ export default function ReportCard({
           >
             <Printer className="h-4 w-4" />
             <span>បោះពុម្ពសៀវភៅតាមដាន (Print A4)</span>
+          </button>
+
+          <button
+            onClick={printAllReportCards}
+            className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs px-5 py-2.5 rounded-xl cursor-pointer transition-colors shadow-xs"
+            title="បោះពុម្ពសៀវភៅតាមដានរបស់សិស្សទាំងអស់ក្នុងថ្នាក់រៀបតាមលំដាប់អក្ខរក្រម"
+          >
+            <Printer className="h-4 w-4" />
+            <span>បោះពុម្ពទាំងអស់ (Print All)</span>
           </button>
 
           <button
@@ -939,10 +971,10 @@ export default function ReportCard({
 
           {/* ==================== RIGHT COLUMN: printable standard A4 workbook page ==================== */}
           <div className="lg:col-span-2">
-            <div className="bg-white border-2 border-slate-350 p-6 md:p-8 shadow-md rounded-2xl print-area font-sans relative">
+            <div className={`bg-white border-2 border-slate-350 p-6 md:p-8 shadow-md rounded-2xl print-area font-sans relative ${printMode === 'all' ? 'no-print' : ''}`}>
               
               {/* Report Header Logo & Title (Ministry Standard Double Box) */}
-              <div className="grid grid-cols-2 items-start pb-2 border-b border-double border-slate-400 mb-4">
+              <div className="grid grid-cols-3 items-start pb-2 border-b border-double border-slate-400 mb-4">
                 <div className="text-left space-y-1">
                   <h3 className="font-moul text-[10px] text-slate-800 leading-normal">{ministryLabel}</h3>
                   <h4 className="font-moul text-[8.5px] text-slate-700 leading-normal pl-1.5">{provincialLabel}</h4>
@@ -954,16 +986,18 @@ export default function ReportCard({
                   </p>
                 </div>
                 
-                <div className="text-right space-y-0.5">
-                  <h2 className="font-moul text-[11px] text-slate-900 leading-normal tracking-wide">ព្រះរាជាណាចក្រកម្ពុជា</h2>
-                  <h3 className="font-moul text-[9px] text-slate-850 leading-normal tracking-wider">ជាតិ សាសនា ព្រះមហាក្សត្រ</h3>
-                  <div className="flex justify-end pr-5 py-0.5">
+                <div className="text-center space-y-0.5 col-span-1">
+                  <h2 className="font-moul text-[11.5px] text-slate-900 leading-normal tracking-wide">ព្រះរាជាណាចក្រកម្ពុជា</h2>
+                  <h3 className="font-moul text-[9.5px] text-slate-850 leading-normal tracking-wider">ជាតិ សាសនា ព្រះមហាក្សត្រ</h3>
+                  <div className="flex justify-center py-0.5">
                     {/* Decorative signature ornament */}
                     <svg width="40" height="8" viewBox="0 0 45 10" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-amber-600 block">
                       <path d="M2.5 5C5.5 1.5 8.5 1.5 11.5 5C14.5 8.5 17.5 8.5 20.5 5C23.5 1.5 26.5 1.5 29.5 5C32.5 8.5 35.5 8.5 38.5 5C41.5 1.5 43.5 3 44.5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                     </svg>
                   </div>
                 </div>
+
+                <div className="text-right"></div>
               </div>
 
               {/* Title Section (ប្រឡងប្រចាំខែ...) with student photo in top right */}
@@ -1203,6 +1237,258 @@ export default function ReportCard({
 
         </div>
       ) : null}
+
+      {/* Printable Area for ALL students when printMode === 'all' */}
+      {printMode === 'all' && (
+        <div className="hidden print:block">
+          {sortedStudents.map((stud, sNewIdx) => {
+            const studentResult = results.find((res) => res.student.id === stud.id);
+            if (!studentResult) return null;
+
+            const { student, total, average, rank } = studentResult;
+            const scoreEntry = monthScores.find((e) => e.studentId === student.id);
+            const scoresMap = scoreEntry?.scores || {};
+            const sCommentInput = scoreEntry?.comments || 'សិស្សមានការខិតខំរៀនសូត្រ វិន័យល្អ និងសីលធម៌រៀបរយ។';
+            const sAbsWithPermit = scoresMap['__absence_permit'] !== undefined ? scoresMap['__absence_permit'] : 0;
+            const sAbsNoPermit = scoresMap['__absence_no_permit'] !== undefined ? scoresMap['__absence_no_permit'] : 0;
+            const isZero = average === 0;
+
+            return (
+              <div 
+                key={student.id} 
+                className="print-page bg-white p-8 font-sans relative"
+                style={{ pageBreakBefore: sNewIdx > 0 ? 'always' : 'avoid' }}
+              >
+                {/* Report Header Logo & Title */}
+                <div className="grid grid-cols-3 items-start pb-2 border-b border-double border-slate-400 mb-4 animate-none">
+                  <div className="text-left space-y-1">
+                    <h3 className="font-moul text-[10px] text-slate-800 leading-normal">{ministryLabel}</h3>
+                    <h4 className="font-moul text-[8.5px] text-slate-700 leading-normal pl-1.5">{provincialLabel}</h4>
+                    <p className="text-[9.5px] font-semibold text-slate-700 pl-3 leading-normal">
+                      {districtLabel}
+                    </p>
+                    <p className="text-[10.5px] font-bold text-slate-900 pl-4 leading-normal">
+                      សាលា៖ <span className="underline decoration-dotted stroke-slate-400 underline-offset-4 font-bold text-[11px]">{schoolLabel}</span>
+                    </p>
+                  </div>
+                  
+                  <div className="text-center space-y-0.5 col-span-1">
+                    <h2 className="font-moul text-[11.5px] text-slate-900 leading-normal tracking-wide">ព្រះរាជាណាចក្រកម្ពុជា</h2>
+                    <h3 className="font-moul text-[9.5px] text-slate-850 leading-normal tracking-wider">ជាតិ សាសនា ព្រះមហាក្សត្រ</h3>
+                    <div className="flex justify-center py-0.5">
+                      <svg width="40" height="8" viewBox="0 0 45 10" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-amber-600 block">
+                        <path d="M2.5 5C5.5 1.5 8.5 1.5 11.5 5C14.5 8.5 17.5 8.5 20.5 5C23.5 1.5 26.5 1.5 29.5 5C32.5 8.5 35.5 8.5 38.5 5C41.5 1.5 43.5 3 44.5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                      </svg>
+                    </div>
+                  </div>
+
+                  <div className="text-right"></div>
+                </div>
+
+                {/* Title Section with student photo */}
+                <div className="flex justify-between items-start pt-1.5 pb-4 border-b border-dashed border-slate-200">
+                  <div className="flex-1 text-center pl-16">
+                    <h2 className="font-moul text-base md:text-lg text-blue-900 tracking-wide uppercase">ប្រឡងប្រចាំខែ{selectedMonth}</h2>
+                    <div className="mt-1 flex items-center justify-center gap-6 text-[10.5px] text-slate-600 font-bold">
+                      <span>ថ្នាក់៖ <strong className="text-slate-900 font-mono text-xs underline decoration-dotted decoration-slate-400">{className}</strong></span>
+                      <span>ឆ្នាំសិក្សា៖ <strong className="text-slate-900 font-mono text-xs underline decoration-dotted decoration-slate-400">{academicYear}</strong></span>
+                    </div>
+                  </div>
+
+                  {/* Passport Portrait photo block */}
+                  <div className="shrink-0 w-[80px] h-[100px] border border-slate-400 flex flex-col items-center justify-center bg-slate-50 rounded select-none relative overflow-hidden">
+                    {student.avatar ? (
+                      <img
+                        src={student.avatar}
+                        alt="Student Portrait"
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="p-1 space-y-1 text-center flex flex-col items-center">
+                        <Camera className="h-4 w-4 text-slate-350" />
+                        <span className="text-[7.5px] font-bold text-slate-400 leading-normal block">រូបថត ៤x៦</span>
+                        <span className="text-[6.5px] text-slate-350 block">គ្មានរូប</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Identity line details section */}
+                <div className="mt-4 grid grid-cols-12 gap-y-1.5 items-center text-[11px] text-slate-800 leading-normal pb-3.5 pt-0.5">
+                  <div className="col-span-6 flex gap-1">
+                    <span className="font-moul text-[9px] text-slate-600">គោត្តនាម-នាមសិស្ស៖</span>
+                    <span className="font-bold text-slate-900 border-b border-dashed border-slate-350 pl-1 expand-underline uppercase">
+                      {student.nameKh}
+                    </span>
+                  </div>
+                  
+                  <div className="col-span-4 flex gap-1">
+                    <span className="font-moul text-[9px] text-slate-600">ឡាតាំង En៖</span>
+                    <span className="font-mono font-bold text-slate-700 border-b border-dashed border-slate-350 pl-1 expand-underline uppercase">
+                      {student.nameEn}
+                    </span>
+                  </div>
+
+                  <div className="col-span-2 flex gap-1">
+                    <span className="font-moul text-[9px] text-slate-600">ភេទ៖</span>
+                    <span className="font-bold text-slate-900 border-b border-dashed border-slate-330 pl-1 expand-underline">
+                      {student.gender === 'ស្រី' ? 'ស' : 'ប'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Major subjects Tabular block */}
+                <div className="grid grid-cols-12 gap-0 relative border-l border-t border-b border-slate-400">
+                  {/* Score columns list */}
+                  <div className="col-span-9">
+                    <table className="w-full text-center border-collapse text-[10.5px] text-slate-800 table-fixed">
+                      <thead>
+                        <tr className="bg-slate-50 font-semibold h-[28px] border-b border-r border-slate-400 text-[10px]">
+                          <th className="border-r border-slate-400 w-[40px]">ល.រ</th>
+                          <th className="border-r border-slate-400 text-left pl-2.5">មុខវិជ្ជា</th>
+                          <th className="border-r border-slate-400 w-[120px]" colSpan={2}>លទ្ធផលសិក្សា</th>
+                          <th className="w-[120px]" colSpan={2}>អវត្តមាន</th>
+                        </tr>
+                        {/* Secondary subheader row */}
+                        <tr className="bg-slate-50/50 font-semibold h-[24px] border-b border-r border-slate-400 text-[9px] text-slate-500 uppercase tracking-wide">
+                          <th className="border-r border-slate-400"></th>
+                          <th className="border-r border-slate-400"></th>
+                          <th className="border-r border-slate-400 w-[60px] text-slate-800 font-bold">ពិន្ទុ</th>
+                          <th className="border-r border-slate-400 w-[60px]">និទ្ទេស</th>
+                          <th className="border-r border-slate-400 w-[60px]">មានច្បាប់</th>
+                          <th className="w-[60px]">អត់ច្បាប់</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-300">
+                        {subjects.map((subj, idx) => {
+                          const scoreVal = scoresMap[subj.id];
+                          const val = typeof scoreVal === 'number' ? scoreVal : 0;
+                          const gradeLetter = val >= 9 ? 'A' : val >= 8 ? 'B' : val >= 7 ? 'C' : val >= 6 ? 'D' : val >= 5 ? 'E' : 'F';
+
+                          return (
+                            <tr key={subj.id} className="h-[25px] border-r border-slate-400">
+                              <td className="border-r border-slate-350 font-bold font-mono text-slate-650">
+                                {idx + 1}
+                              </td>
+                              <td className="border-r border-slate-350 text-left pl-2.5 font-semibold text-slate-800 truncate">
+                                {subj.name.split(' (')[0]}
+                              </td>
+                              <td className={`border-r border-slate-350 font-bold font-mono text-xs ${val < 5 ? 'text-rose-600' : 'text-slate-800'}`}>
+                                {isZero ? '-' : scoreVal !== undefined ? scoreVal : '-'}
+                              </td>
+                              <td className="border-r border-slate-350 font-extrabold text-slate-700">
+                                {isZero ? '-' : scoreVal !== undefined ? gradeLetter : '-'}
+                              </td>
+                              <td className="border-r border-slate-300 font-mono text-slate-500">
+                                {idx === 0 && sAbsWithPermit > 0 ? toKhmerDigits(sAbsWithPermit) : '០'}
+                              </td>
+                              <td className="font-mono text-slate-500">
+                                {idx === 0 && sAbsNoPermit > 0 ? toKhmerDigits(sAbsNoPermit) : '០'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Comment column */}
+                  <div className="col-span-3 border-l border-slate-400 relative">
+                    <div className="absolute inset-0 flex flex-col">
+                      <div className="bg-slate-50 text-center py-2 border-b border-slate-400 font-moul text-[8.5px] leading-normal h-[52px] flex items-center justify-center">
+                        មូលវិចារគ្រូ
+                      </div>
+                      <div className="flex-1 p-3.5 bg-stone-50/15 leading-relaxed overflow-hidden flex flex-col justify-center text-center">
+                        <p className="text-[10px] text-slate-900 font-semibold italic select-none">
+                          " {sCommentInput || 'ខិតខំរៀនសូត្រ ស្តាប់ការពន្យល់ល្អ និងមានវិន័យរឹងមាំខ្លាំង។' } "
+                        </p>
+                        
+                        <div className="mt-4 border-t border-dashed border-slate-300 pt-3 space-y-1 text-left hidden print:block">
+                          <span className="text-[8px] text-slate-400 font-bold block uppercase leading-none">កំណត់បន្ថែមភារកិច្ច៖</span>
+                          <div className="border-b border-dotted border-slate-300 h-2.5"></div>
+                          <div className="border-b border-dotted border-slate-300 h-2.5"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Summary boxes */}
+                <div className="mt-2 text-center text-xs">
+                  <div className="grid grid-cols-3 border border-slate-400 overflow-hidden rounded-lg font-bold text-slate-800 bg-slate-50/25">
+                    <div className="p-2 border-r border-slate-400">
+                      <span className="text-[9.5px] font-moul text-slate-500 block uppercase mb-0.5">សរុបពិន្ទុ</span>
+                      <span className="text-sm font-extrabold font-mono text-slate-800">
+                        {total}
+                      </span>
+                    </div>
+                    <div className="p-2 border-r border-slate-400 bg-blue-50/10">
+                      <span className="text-[9.5px] font-moul text-blue-800 block uppercase mb-0.5">មធ្យមភាគ</span>
+                      <span className="text-sm font-extrabold font-mono text-blue-900">
+                        {average}
+                      </span>
+                    </div>
+                    <div className="p-2">
+                      <span className="text-[9.5px] font-moul text-red-650 block uppercase mb-0.5">ចំណាត់ថ្នាក់</span>
+                      <span className="text-sm font-extrabold text-red-650">
+                        {average === 0 ? '-' : toKhmerDigits(rank)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Parents sign and signature */}
+                <div className="mt-4 grid grid-cols-2 gap-4 items-start pt-1 font-semibold text-slate-700">
+                  <div className="space-y-2 border border-slate-205 p-3.5 rounded-xl bg-slate-50/10 select-none">
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wide">
+                      សិស្សសរុបមានចំនួន៖ <strong className="text-slate-800 font-mono text-xs">{sortedStudents.length}</strong> នាក់, ស្រី៖ <strong className="text-slate-800 font-mono text-xs">{totalGirlsInClass}</strong> នាក់
+                    </p>
+                    
+                    <div className="space-y-1 text-[10.5px]">
+                      <span className="text-[9px] font-moul text-slate-600 block uppercase">មតិមាតាបិតា / អ្នកអាណាព្យាបាល៖</span>
+                      <div className="pt-2.5 space-y-3.5">
+                        <div className="border-b border-dotted border-slate-350 h-1"></div>
+                        <div className="border-b border-dotted border-slate-350 h-1"></div>
+                        <div className="border-b border-dotted border-slate-350 h-1"></div>
+                      </div>
+                    </div>
+
+                    <div className="pt-10 flex flex-col items-center text-center">
+                      <p className="text-[9px] font-semibold text-slate-500 leading-none">បានឃើញ និងឯកភាព</p>
+                      <p className="font-moul text-[8.5px] pt-1 leading-normal text-slate-800">នាយកសាលា</p>
+                      <div className="h-16"></div>
+                      <p className="text-[10px] text-slate-400 font-medium leading-none">................................................</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-end text-right pr-2 space-y-1">
+                    <p className="text-[10px] text-amber-900 font-semibold leading-relaxed tracking-tight py-0.5">
+                      {getLunarCalendarDate(selectedMonth, academicYear)}
+                    </p>
+                    
+                    <p className="text-[10px] font-bold text-slate-800 leading-relaxed">
+                      ធ្វើនៅ វត្តតាមិម, ថ្ងៃទី {toKhmerDigits(new Date().getDate().toString().padStart(2, '0'))} ខែ {selectedMonth} ឆ្នាំ {toKhmerDigits(new Date().getFullYear())}
+                    </p>
+
+                    <div className="pt-8 flex flex-col items-center text-center w-full max-w-[200px] mt-2">
+                      <p className="font-moul text-[8.5px] leading-normal text-slate-800">គ្រូបន្ទុកថ្នាក់</p>
+                      <div className="h-20 flex items-center justify-center relative select-none">
+                        <div className="absolute border border-dotted border-rose-500/10 rounded-full h-11 w-11 flex items-center justify-center rotate-12 -z-10 no-print">
+                          <span className="text-[7px] text-rose-500/15 font-bold uppercase truncate">GRADED</span>
+                        </div>
+                      </div>
+                      <p className="font-bold text-slate-850 text-xs border-b border-dashed border-slate-300 pb-0.5 min-w-[130px] font-mono tracking-wide">
+                        {teacherName || '................................'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

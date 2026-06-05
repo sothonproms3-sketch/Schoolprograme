@@ -608,7 +608,7 @@ export default function MonthlyRanking({
       {/* Printed Template Outer Card */}
       <div className="bg-white rounded-2xl border border-slate-300 shadow-xs p-6 md:p-8 print-area">
         {/* Ministry Official Header (Dual block with double-border layout under) */}
-        <div className="grid grid-cols-2 items-start pb-4 border-b border-double border-slate-400 mb-4">
+        <div className="grid grid-cols-3 items-start pb-4 border-b border-double border-slate-400 mb-4">
           <div className="text-left space-y-1">
             <h3 className="font-moul text-[10px] text-slate-900 leading-normal">{ministryName}</h3>
             <h4 className="font-moul text-[8.5px] text-slate-700 leading-normal pl-1">{provinceName}</h4>
@@ -620,16 +620,18 @@ export default function MonthlyRanking({
             </p>
           </div>
           
-          <div className="text-right space-y-0.5">
+          <div className="text-center space-y-0.5 col-span-1">
             <h2 className="font-moul text-[11px] text-slate-900 leading-normal tracking-wide">ព្រះរាជាណាចក្រកម្ពុជា</h2>
             <h3 className="font-moul text-[9px] text-slate-850 leading-normal tracking-wider">ជាតិ សាសនា ព្រះមហាក្សត្រ</h3>
-            <div className="flex justify-end pr-5 py-1">
+            <div className="flex justify-center py-1">
               {/* Decorative signature ornament */}
               <svg width="40" height="8" viewBox="0 0 45 10" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-amber-600 block">
                 <path d="M2.5 5C5.5 1.5 8.5 1.5 11.5 5C14.5 8.5 17.5 8.5 20.5 5C23.5 1.5 26.5 1.5 29.5 5C32.5 8.5 35.5 8.5 38.5 5C41.5 1.5 43.5 3 44.5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             </div>
           </div>
+
+          <div className="text-right"></div>
         </div>
 
         {/* Main Banner Title */}

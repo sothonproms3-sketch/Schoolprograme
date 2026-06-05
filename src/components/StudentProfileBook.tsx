@@ -139,7 +139,9 @@ export default function StudentProfileBook({
     setSelectedStudent(null);
   };
 
-  const filteredStudents = students.filter(
+  const sortedStudents = [...students].sort((a, b) => a.nameEn.localeCompare(b.nameEn, 'en', { sensitivity: 'base' }));
+
+  const filteredStudents = sortedStudents.filter(
     (s) =>
       s.nameKh.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.nameEn.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -163,7 +165,7 @@ export default function StudentProfileBook({
     ];
     csvContent += headers.map(h => `"${h.replace(/"/g, '""')}"`).join(",") + "\r\n";
     
-    students.forEach((student, index) => {
+    sortedStudents.forEach((student, index) => {
       const row = [
         index + 1,
         student.nameKh,
@@ -244,7 +246,7 @@ export default function StudentProfileBook({
             </tr>
           </thead>
           <tbody>
-            ${students.map((student, idx) => `
+            ${sortedStudents.map((student, idx) => `
               <tr>
                 <td style="text-align: center;">${idx + 1}</td>
                 <td><b>${student.nameKh}</b></td>
@@ -421,7 +423,7 @@ export default function StudentProfileBook({
             </tr>
           </thead>
           <tbody>
-            ${students.map((student, idx) => `
+            ${sortedStudents.map((student, idx) => `
               <tr>
                 <td class="text-center">${idx + 1}</td>
                 <td><b>${student.nameKh}</b></td>
@@ -999,7 +1001,7 @@ export default function StudentProfileBook({
       {/* Printable Registry Book - HIDDEN ON SCREEN, SHOWN ON PRINT */}
       <div className="hidden print:block print-area">
         {/* Official Header */}
-        <div className="grid grid-cols-2 items-start pb-5 border-b border-double border-slate-350 mb-6">
+        <div className="grid grid-cols-3 items-start pb-5 border-b border-double border-slate-350 mb-6">
           <div className="text-left space-y-1">
             <h3 className="font-moul text-[10px] text-slate-800 leading-normal">{ministryLabel}</h3>
             <h4 className="font-moul text-[8.5px] text-slate-700 leading-normal pl-1.5">{provincialLabel}</h4>
@@ -1011,15 +1013,17 @@ export default function StudentProfileBook({
             </p>
           </div>
           
-          <div className="text-right space-y-1">
+          <div className="text-center space-y-1 col-span-1">
             <h2 className="font-moul text-[12px] text-slate-900 leading-normal tracking-wide">ព្រះរាជាណាចក្រកម្ពុជា</h2>
             <h3 className="font-moul text-[10px] text-slate-850 leading-normal tracking-wider">ជាតិ សាសនា ព្រះមហាក្សត្រ</h3>
-            <div className="flex justify-end pr-8">
+            <div className="flex justify-center py-0.5">
               <svg width="45" height="10" viewBox="0 0 45 10" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-amber-600 block">
                 <path d="M2.5 5C5.5 1.5 8.5 1.5 11.5 5C14.5 8.5 17.5 8.5 20.5 5C23.5 1.5 26.5 1.5 29.5 5C32.5 8.5 35.5 8.5 38.5 5C41.5 1.5 43.5 3 44.5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             </div>
           </div>
+
+          <div className="text-right"></div>
         </div>
 
         {/* Title */}
@@ -1049,14 +1053,14 @@ export default function StudentProfileBook({
             </tr>
           </thead>
           <tbody>
-            {students.length === 0 ? (
+            {sortedStudents.length === 0 ? (
               <tr>
                 <td colSpan={9} className="py-8 text-center text-slate-400">
                   មិនទាន់មានទិន្នន័យសិស្សឡើយ។
                 </td>
               </tr>
             ) : (
-              students.map((student, idx) => (
+              sortedStudents.map((student, idx) => (
                 <tr key={student.id} className="text-center border-b border-slate-300">
                   <td className="py-2 px-1 border-r border-slate-300 font-mono font-bold">{idx + 1}</td>
                   <td className="py-2 px-2 border-r border-slate-300 text-left font-semibold text-slate-900">{student.nameKh}</td>
@@ -1078,10 +1082,10 @@ export default function StudentProfileBook({
         </table>
 
         {/* Signature at bottom */}
-        <div className="mt-12 grid grid-cols-2 text-center text-xs text-slate-700 pt-6">
+        <div className="mt-12 grid grid-cols-2 text-center text-xs text-slate-705 pt-6">
           <div>
             <p className="font-semibold text-slate-500">បានឃើញ និងឯកភាព</p>
-            <p className="font-moul text-[9.5px] pt-1 leading-relaxed">នាយកសាលាបឋមសិក្សា</p>
+            <p className="font-moul text-[8.5px] pt-1 leading-relaxed">នាយកសាលា</p>
             <div className="h-16 flex items-center justify-center relative select-none">
               {/* Decorative stamp element behind */}
               <div className="absolute border border-dotted border-rose-500/10 rounded-full h-11 w-11 flex items-center justify-center rotate-12 -z-10 no-print">
@@ -1090,13 +1094,16 @@ export default function StudentProfileBook({
             </div>
             <p className="text-slate-400">................................................</p>
           </div>
-          <div>
-            <p className="italic font-bold text-[10.5px] text-amber-900">
+          <div className="flex flex-col items-center">
+            <p className="italic font-bold text-[10px] text-amber-900 leading-normal">
               ថ្ងៃសុក្រ ៧កើត ខែមិគសិរ ឆ្នាំជូត ឯកស័ក {academicYear ? toKhmerDigits(academicYear) : '២០២៦'}
             </p>
-            <p className="font-moul text-[9.5px] pt-1 leading-relaxed">គ្រូបន្ទុកថ្នាក់</p>
+            <p className="text-[10px] font-bold text-slate-800 leading-normal">
+              ធ្វើនៅ {schoolLabel || 'សាលា'}, ថ្ងៃទី {toKhmerDigits(new Date().getDate().toString().padStart(2, '0'))} ខែ {["មករា", "កុម្ភៈ", "មីនា", "មេសា", "ឧសភា", "មិថុនា", "កក្កដា", "សីហា", "កញ្ញា", "តុលា", "វិច្ឆិកា", "ធ្នូ"][new Date().getMonth()]} ឆ្នាំ {toKhmerDigits(new Date().getFullYear())}
+            </p>
+            <p className="font-moul text-[8.5px] pt-2.5 leading-relaxed text-slate-805">គ្រូបន្ទុកថ្នាក់</p>
             <div className="h-16 flex items-center justify-center"></div>
-            <p className="font-bold text-slate-900 text-sm">{teacherName || '................................'}</p>
+            <p className="font-bold text-slate-900 text-sm border-b border-dashed border-slate-300 pb-0.5 min-w-[130px] font-mono tracking-wide">{teacherName || '................................'}</p>
           </div>
         </div>
       </div>
