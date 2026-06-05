@@ -15,6 +15,7 @@ import {
   X, 
   Save, 
   FileText, 
+  FileSpreadsheet, 
   CheckCircle2, 
   UserPlus
 } from 'lucide-react';
@@ -249,6 +250,363 @@ export default function ReportCard({
     window.print();
   };
 
+  const exportActiveStudentToExcel = () => {
+    if (!activeStudentResult) return;
+    const { student, total, average, rank } = activeStudentResult;
+
+    const tableHtml = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <!--[if gte mso 9]>
+        <xml>
+          <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+              <x:ExcelWorksheet>
+                <x:Name>សៀវភៅតាមដាន_${student.nameKh}</x:Name>
+                <x:WorksheetOptions>
+                  <x:DisplayGridlines/>
+                </x:WorksheetOptions>
+              </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+          </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
+        <meta charset="utf-8">
+        <style>
+          body { font-family: 'Khmer OS Battambang', 'Segoe UI', Arial, sans-serif; }
+          .header { text-align: center; font-size: 12px; margin-bottom: 20px; }
+          .title { text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 10px; color: #1e3a8a; }
+          .info-table { border: none; margin-bottom: 15px; font-size: 12px; }
+          table.score-table { border-collapse: collapse; width: 100%; font-size: 11px; }
+          table.score-table th { background-color: #f1f5f9; font-weight: bold; padding: 6px; border: 1px solid #475569; }
+          table.score-table td { padding: 6px; border: 1px solid #475569; text-align: center; }
+          table.score-table td.subject-name { text-align: left; font-weight: bold; }
+          .highlight { background-color: #eff6ff; font-weight: bold; }
+          .summary-box { border: 1px solid #475569; margin-top: 15px; padding: 8px; font-size: 11px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <b>${ministryLabel}</b><br>
+          ${provincialLabel}<br>
+          ${districtLabel}<br>
+          សាលា៖ ${schoolLabel}
+        </div>
+        
+        <div class="title">សៀវភៅតាមដានការសិក្សា និងស្រង់ពិន្ទុប្រចាំខែ${selectedMonth}</div>
+        <div style="text-align: center; font-size: 11px; margin-bottom: 10px;">
+          <b>ថ្នាក់៖</b> ${className} | <b>ឆ្នាំសិក្សា៖</b> ${academicYear}
+        </div>
+
+        <table class="info-table">
+          <tr>
+            <td><b>ឈ្មោះសិស្ស៖</b> ${student.nameKh}</td>
+            <td><b>ឡាតាំង៖</b> ${student.nameEn}</td>
+            <td><b>ភេទ៖</b> ${student.gender}</td>
+            <td><b>ថ្ងៃខែឆ្នាំកំណើត៖</b> ${student.dob || ''}</td>
+          </tr>
+        </table>
+
+        <table class="score-table">
+          <thead>
+            <tr>
+              <th>ល.រ</th>
+              <th style="text-align: left;">មុខវិជ្ជាសម្រាប់ការស្រង់ពិន្ទុ</th>
+              <th>ពិន្ទុទទួលបាន</th>
+              <th>និទ្ទេស</th>
+              <th>ពិន្ទុអតិបរមា</th>
+              <th>អវត្តមានមានច្បាប់</th>
+              <th>អវត្តមានអត់ច្បាប់</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${subjects.map((subj, idx) => {
+              const scoreVal = activeScoresMap[subj.id];
+              const val = typeof scoreVal === 'number' ? scoreVal : 0;
+              const gradeLetter = val >= 9 ? 'A' : val >= 8 ? 'B' : val >= 7 ? 'C' : val >= 6 ? 'D' : val >= 5 ? 'E' : 'F';
+              return `
+                <tr>
+                  <td>${idx + 1}</td>
+                  <td class="subject-name">${subj.name}</td>
+                  <td style="font-weight: bold; ${val < 5 ? 'color: red;' : ''}">${scoreVal !== undefined ? scoreVal : '-'}</td>
+                  <td style="font-weight: bold;">${scoreVal !== undefined ? gradeLetter : '-'}</td>
+                  <td>${subj.maxScore}</td>
+                  <td>${idx === 0 && absWithPermit > 0 ? absWithPermit : '០'}</td>
+                  <td>${idx === 0 && absNoPermit > 0 ? absNoPermit : '០'}</td>
+                </tr>
+              `;
+            }).join('')}
+            <tr class="highlight">
+              <td colspan="2" style="text-align: left;">សរុបពិន្ទុនៃការប្រឡង</td>
+              <td>${total}</td>
+              <td colspan="4"></td>
+            </tr>
+            <tr class="highlight">
+              <td colspan="2" style="text-align: left;">មធ្យមភាគសិក្សាជាមធ្យម</td>
+              <td>${average}</td>
+              <td colspan="4"></td>
+            </tr>
+            <tr class="highlight" style="color: red;">
+              <td colspan="2" style="text-align: left;">ចំណាត់ថ្នាក់ក្នុងថ្នាក់ (Rank)</td>
+              <td>${toKhmerDigits(rank)}</td>
+              <td colspan="4"></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="summary-box">
+          <b>មតិវាយតម្លៃរបស់គ្រូ៖</b> ${commentInput || 'ខិតខំរៀនសូត្រ ស្តាប់ការពន្យល់ល្អ និងមានវិន័យរឹងមាំខ្លាំង។'}<br><br>
+          <b>គ្រូបន្ទុកថ្នាក់៖</b> ${teacherName}
+        </div>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([tableHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `សៀវភៅតាមដាន_${student.nameKh}_ខែ_${selectedMonth}.xls`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportActiveStudentToWord = () => {
+    if (!activeStudentResult) return;
+    const { student, total, average, rank } = activeStudentResult;
+
+    const contentHtml = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <title>សៀវភៅតាមដានការសិក្សា - ${student.nameKh}</title>
+        <style>
+          @page {
+            size: A4;
+            margin: 0.8in;
+          }
+          body {
+            font-family: 'Khmer OS Battambang', 'Segoe UI', Arial, sans-serif;
+            line-height: 1.4;
+            font-size: 11pt;
+            color: #333333;
+          }
+          .header {
+            text-align: center;
+            margin-bottom: 20px;
+          }
+          .ministry {
+            font-family: 'Khmer OS Muol Light', serif;
+            font-size: 11pt;
+            font-weight: bold;
+            margin-bottom: 2px;
+            text-align: left;
+            width: 50%;
+            float: left;
+          }
+          .country {
+            font-family: 'Khmer OS Muol Light', serif;
+            font-size: 11pt;
+            font-weight: bold;
+            margin-bottom: 2px;
+            text-align: right;
+            width: 50%;
+            float: right;
+          }
+          .school {
+            font-size: 10pt;
+            margin-top: 5px;
+            text-align: left;
+            width: 50%;
+            float: left;
+          }
+          .motto {
+            font-size: 10pt;
+            margin-top: 5px;
+            text-align: right;
+            width: 50%;
+            float: right;
+          }
+          .title {
+            font-family: 'Khmer OS Muol Light', serif;
+            font-size: 15pt;
+            font-weight: bold;
+            text-align: center;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            color: #1e3a8a;
+          }
+          .info-block {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+          }
+          .info-block td {
+            border: none;
+            padding: 4px;
+            font-size: 10.5pt;
+          }
+          table.score-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+          }
+          table.score-table th {
+            background-color: #f1f5f9;
+            font-weight: bold;
+            padding: 6px;
+            border: 1px solid #475569;
+            font-size: 9.5pt;
+            text-align: center;
+          }
+          table.score-table td {
+            padding: 6.5px;
+            border: 1px solid #475569;
+            font-size: 9.5pt;
+            text-align: center;
+          }
+          table.score-table td.subject-name {
+            text-align: left;
+            font-weight: bold;
+          }
+          .text-center {
+            text-align: center;
+          }
+          .highlight {
+            font-weight: bold;
+            background-color: #f8fafc;
+          }
+          .comment-section {
+            margin-top: 15px;
+            border: 1px solid #cbd5e1;
+            padding: 10px;
+            border-radius: 6px;
+            background-color: #fafafa;
+          }
+          .signature-section {
+            margin-top: 30px;
+            width: 100%;
+          }
+          .sig-box {
+            float: right;
+            text-align: center;
+            width: 250px;
+          }
+        </style>
+      </head>
+      <body>
+        <div>
+          <div class="ministry">${ministryLabel}</div>
+          <div class="country">ព្រះរាជាណាចក្រកម្ពុជា</div>
+        </div>
+        <div style="clear: both;"></div>
+        <div>
+          <div class="school">${provincialLabel}<br>${districtLabel}<br><b>សាលា៖ ${schoolLabel}</b></div>
+          <div class="motto">ជាតិ សាសនា ព្រះមហាក្សត្រ</div>
+        </div>
+        
+        <div style="clear: both; height: 15px;"></div>
+
+        <div class="title">សៀវភៅតាមដានការសិក្សា និងស្រង់ពិន្ទុ</div>
+        <div style="text-align: center; font-size: 11pt; font-weight: bold; margin-bottom: 20px;">
+          ការប្រឡងប្រចាំខែ៖ <span style="color: #1e3a8a;">${selectedMonth}</span> &nbsp;&nbsp;&nbsp;&nbsp; ថ្នាក់៖ ${className} &nbsp;&nbsp;&nbsp;&nbsp; ឆ្នាំសិក្សា៖ ${academicYear}
+        </div>
+
+        <table class="info-block">
+          <tr>
+            <td><b>គោត្តនាម-នាមសិស្ស៖</b> <span style="font-size: 11pt; color: #1e3a8a;">${student.nameKh}</span></td>
+            <td><b>ឡាតាំង៖</b> <span style="text-transform: uppercase;">${student.nameEn}</span></td>
+            <td><b>ភេទ៖</b> ${student.gender}</td>
+            <td><b>ថ្ងៃខែឆ្នាំកំណើត៖</b> ${student.dob || ''}</td>
+          </tr>
+        </table>
+
+        <table class="score-table">
+          <thead>
+            <tr>
+              <th style="width: 8%;">ល.រ</th>
+              <th style="text-align: left; width: 35%;">មុខវិជ្ជាសម្រាប់ការស្រង់ពិន្ទុ</th>
+              <th style="width: 13%;">ពិន្ទុ</th>
+              <th style="width: 11%;">និទ្ទេស</th>
+              <th style="width: 13%;">ពិន្ទុអតិបរមា</th>
+              <th style="width: 10%;">ច្បាប់</th>
+              <th style="width: 10%;">អត់ច្បាប់</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${subjects.map((subj, idx) => {
+              const scoreVal = activeScoresMap[subj.id];
+              const val = typeof scoreVal === 'number' ? scoreVal : 0;
+              const gradeLetter = val >= 9 ? 'A' : val >= 8 ? 'B' : val >= 7 ? 'C' : val >= 6 ? 'D' : val >= 5 ? 'E' : 'F';
+              return `
+                <tr>
+                  <td>${idx + 1}</td>
+                  <td class="subject-name">${subj.name}</td>
+                  <td style="font-weight: bold; ${val < 5 ? 'color: red;' : ''}">${scoreVal !== undefined ? scoreVal : '-'}</td>
+                  <td style="font-weight: bold;">${scoreVal !== undefined ? gradeLetter : '-'}</td>
+                  <td>${subj.maxScore}</td>
+                  <td>${idx === 0 && absWithPermit > 0 ? absWithPermit : '០'}</td>
+                  <td>${idx === 0 && absNoPermit > 0 ? absNoPermit : '០'}</td>
+                </tr>
+              `;
+            }).join('')}
+            <tr class="highlight">
+              <td colspan="2" style="text-align: left;"><b>សរុបពិន្ទុរួម</b></td>
+              <td><b>${total}</b></td>
+              <td colspan="4"></td>
+            </tr>
+            <tr class="highlight">
+              <td colspan="2" style="text-align: left;"><b>មធ្យមភាគប្រឡង</b></td>
+              <td style="color: #1e3a8a;"><b>${average}</b></td>
+              <td colspan="4"></td>
+            </tr>
+            <tr class="highlight">
+              <td colspan="2" style="text-align: left;"><b>ចំណាត់ថ្នាក់ក្នុងថ្នាក់ (Rank)</b></td>
+              <td style="color: red;"><b>${toKhmerDigits(rank)}</b></td>
+              <td colspan="4"></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="comment-section">
+          <b>មតិវាយតម្លៃរបស់គ្រូប្រចាំខែ៖</b><br>
+          <span style="font-style: italic; color: #1e3a8a;">"${commentInput || 'ខិតខំរៀនសូត្រ ស្តាប់ការពន្យល់ល្អ និងមានវិន័យរឹងមាំខ្លាំង។'}"</span>
+        </div>
+
+        <div class="signature-section">
+          <table style="width: 100%; border: none;">
+            <tr style="border: none;">
+              <td style="border: none; width: 50%; text-align: left;">
+                <p>បានឃើញ និងឯកភាព</p>
+                <p style="font-family: 'Khmer OS Muol Light'; font-size: 9.5pt; margin-top: 5px; font-weight: bold;">នាយកសាលា</p>
+                <div style="height: 60px;"></div>
+                <p>................................................</p>
+              </td>
+              <td style="border: none; width: 50%; text-align: center;">
+                <p>${getLunarCalendarDate(selectedMonth, academicYear)}</p>
+                <p>ធ្វើនៅ ${schoolLabel}, ថ្ងៃទី ${toKhmerDigits(new Date().getDate().toString().padStart(2, '0'))} ខែ ${selectedMonth} ឆ្នាំ ${toKhmerDigits(new Date().getFullYear())}</p>
+                <p style="font-family: 'Khmer OS Muol Light'; font-size: 9.5pt; margin-top: 5px; font-weight: bold;">គ្រូបន្ទុកថ្នាក់</p>
+                <div style="height: 50px;"></div>
+                <p><b>${teacherName || '................................'}</b></p>
+              </td>
+            </tr>
+          </table>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([contentHtml], { type: 'application/msword;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `សៀវភៅតាមដាន_${student.nameKh}_ខែ_${selectedMonth}.doc`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const totalGirlsInClass = students.filter(s => s.gender === 'ស្រី').length;
 
   return (
@@ -287,6 +645,26 @@ export default function ReportCard({
           >
             <Printer className="h-4 w-4" />
             <span>បោះពុម្ពសៀវភៅតាមដាន (Print A4)</span>
+          </button>
+
+          <button
+            onClick={exportActiveStudentToExcel}
+            disabled={!activeStudentResult}
+            className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-5 py-2.5 rounded-xl cursor-pointer transition-colors shadow-xs disabled:opacity-50"
+            title="ទាញយកសន្លឹកតាមដានការសិក្សារបស់សិស្សម្នាក់នេះជាឯកសារ Excel"
+          >
+            <FileSpreadsheet className="h-4 w-4" />
+            <span>នាំចេញជា Excel</span>
+          </button>
+
+          <button
+            onClick={exportActiveStudentToWord}
+            disabled={!activeStudentResult}
+            className="flex items-center justify-center gap-2 bg-slate-600 hover:bg-slate-700 text-white font-semibold text-xs px-5 py-2.5 rounded-xl cursor-pointer transition-colors shadow-xs disabled:opacity-50"
+            title="ទាញយកសន្លឹកតាមដានការសិក្សារបស់សិស្សម្នាក់នេះជាឯកសារ Word"
+          >
+            <FileText className="h-4 w-4" />
+            <span>នាំចេញជា Word</span>
           </button>
         </div>
       </div>

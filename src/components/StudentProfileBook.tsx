@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Student, Gender } from '../types';
-import { UserPlus, Search, Edit2, Trash2, ShieldCheck, UserCheck, Calendar, Phone, MapPin, Notebook, Plus, X, FileSpreadsheet, Printer, Camera } from 'lucide-react';
+import { UserPlus, Search, Edit2, Trash2, ShieldCheck, UserCheck, Calendar, Phone, MapPin, Notebook, Plus, X, FileSpreadsheet, Printer, Camera, FileText } from 'lucide-react';
 
 interface StudentProfileBookProps {
   students: Student[];
@@ -190,6 +190,279 @@ export default function StudentProfileBook({
     document.body.removeChild(link);
   };
 
+  const exportToExcel = () => {
+    const tableHtml = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <!--[if gte mso 9]>
+        <xml>
+          <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+              <x:ExcelWorksheet>
+                <x:Name>បញ្ជីឈ្មោះសិស្ស</x:Name>
+                <x:WorksheetOptions>
+                  <x:DisplayGridlines/>
+                </x:WorksheetOptions>
+              </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+          </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
+        <meta charset="utf-8">
+        <style>
+          body { font-family: 'Khmer OS Battambang', 'Segoe UI', Arial, sans-serif; }
+          table { border-collapse: collapse; width: 100%; }
+          th { background-color: #1e3a8a; color: #ffffff; font-weight: bold; padding: 8px; border: 1px solid #cbd5e1; text-align: center; }
+          td { padding: 8px; border: 1px solid #cbd5e1; text-align: left; }
+          .gender-female { color: #db2777; }
+          .gender-male { color: #1d4ed8; }
+          .title { text-align: center; font-size: 18px; font-weight: bold; margin-bottom: 20px; color: #1e3a8a; }
+          .meta-info { margin-bottom: 15px; font-size: 13px; text-align: center; }
+        </style>
+      </head>
+      <body>
+        <div class="title">បញ្ជីឈ្មោះសិស្ស (សៀវភៅសិក្ខាគារិក)</div>
+        <div class="meta-info">
+          <strong>ថ្នាក់សិក្សា៖</strong> ${className} &nbsp;&nbsp;|&nbsp;&nbsp; 
+          <strong>ឆ្នាំសិក្សា៖</strong> ${academicYear} &nbsp;&nbsp;|&nbsp;&nbsp; 
+          <strong>គ្រូទទួលបន្ទុក៖</strong> ${teacherName}
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>ល.រ</th>
+              <th>ឈ្មោះភាសាខ្មែរ</th>
+              <th>ឈ្មោះឡាតាំង</th>
+              <th>ភេទ</th>
+              <th>ថ្ងៃខែឆ្នាំកំណើត</th>
+              <th>ទីកន្លែងកំណើត</th>
+              <th>ឈ្មោះឪពុក</th>
+              <th>ឈ្មោះម្តាយ</th>
+              <th>លេខទូរស័ព្ទ</th>
+              <th>អាសយដ្ឋានបច្ចុប្បន្ន</th>
+              <th>សីលធម៌</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${students.map((student, idx) => `
+              <tr>
+                <td style="text-align: center;">${idx + 1}</td>
+                <td><b>${student.nameKh}</b></td>
+                <td style="text-transform: uppercase;">${student.nameEn}</td>
+                <td style="text-align: center;" class="${student.gender === 'ស្រី' ? 'gender-female' : 'gender-male'}">${student.gender}</td>
+                <td style="text-align: center;">${student.dob || ''}</td>
+                <td>${student.birthPlace || ''}</td>
+                <td>${student.fatherName || ''}</td>
+                <td>${student.motherName || ''}</td>
+                <td style="mso-number-format:'\\@'; text-align: center;">${student.phone || ''}</td>
+                <td>${student.address || ''}</td>
+                <td style="text-align: center;">${student.conduct}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([tableHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `បញ្ជីឈ្មោះសិស្ស_សៀវភៅសិក្ខាគារិក_${className.replace(/\s+/g, '_')}.xls`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportToWord = () => {
+    const khmerMonths = ["មករា", "កុម្ភៈ", "មីនា", "មេសា", "ឧសភា", "មិថុនា", "កក្កដា", "សីហា", "កញ្ញា", "តុលា", "វិច្ឆិកា", "ធ្នូ"];
+    const currentMonthKh = khmerMonths[new Date().getMonth()];
+
+    const contentHtml = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <title>បញ្ជីឈ្មោះសិស្ស</title>
+        <style>
+          @page {
+            size: A4;
+            margin: 1in;
+          }
+          body {
+            font-family: 'Khmer OS Battambang', 'Segoe UI', Arial, sans-serif;
+            line-height: 1.5;
+            font-size: 11pt;
+            color: #333333;
+          }
+          .header {
+            text-align: center;
+            margin-bottom: 30px;
+          }
+          .ministry {
+            font-family: 'Khmer OS Muol Light', serif;
+            font-size: 11pt;
+            font-weight: bold;
+            margin-bottom: 2px;
+            text-align: left;
+            width: 50%;
+            float: left;
+          }
+          .country {
+            font-family: 'Khmer OS Muol Light', serif;
+            font-size: 11pt;
+            font-weight: bold;
+            margin-bottom: 2px;
+            text-align: right;
+            width: 50%;
+            float: right;
+          }
+          .school {
+            font-size: 10pt;
+            margin-top: 5px;
+            text-align: left;
+            width: 50%;
+            float: left;
+          }
+          .motto {
+            font-size: 10pt;
+            margin-top: 5px;
+            text-align: right;
+            width: 50%;
+            float: right;
+          }
+          .title {
+            font-family: 'Khmer OS Muol Light', serif;
+            font-size: 16pt;
+            font-weight: bold;
+            text-align: center;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            color: #1e3a8a;
+          }
+          .meta-info {
+            margin-bottom: 20px;
+            border-bottom: 2px double #1e3a8a;
+            padding-bottom: 10px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+          }
+          th {
+            background-color: #1e3a8a;
+            color: #ffffff;
+            font-weight: bold;
+            padding: 8px;
+            border: 1px solid #cbd5e1;
+            font-size: 10pt;
+            text-align: center;
+          }
+          td {
+            padding: 8px;
+            border: 1px solid #cbd5e1;
+            font-size: 9.5pt;
+          }
+          .text-center {
+            text-align: center;
+          }
+          .gender-female {
+            color: #db2777;
+            font-weight: bold;
+          }
+          .signature-section {
+            margin-top: 40px;
+            width: 100%;
+          }
+          .sig-box {
+            float: right;
+            text-align: center;
+            width: 250px;
+          }
+        </style>
+      </head>
+      <body>
+        <div>
+          <div class="ministry">${ministryLabel}</div>
+          <div class="country">ព្រះរាជាណាចក្រកម្ពុជា</div>
+        </div>
+        <div style="clear: both;"></div>
+        <div>
+          <div class="school">${provincialLabel}<br>${districtLabel}<br><b>សាលា៖ ${schoolLabel}</b></div>
+          <div class="motto">ជាតិ សាសនា ព្រះមហាក្សត្រ</div>
+        </div>
+        
+        <div style="clear: both; height: 20px;"></div>
+
+        <div class="title">បញ្ជីឈ្មោះសិក្ខាគារិក (សៀវភៅសិក្ខាគារិក)</div>
+        
+        <div class="meta-info">
+          <table style="width: 100%; border: none; margin-bottom: 10px;">
+            <tr style="border: none;">
+              <td style="border: none; padding: 0;"><b>ថ្នាក់រៀន / ក្រុម៖</b> ${className}</td>
+              <td style="border: none; padding: 0; text-align: center;"><b>ឆ្នាំសិក្សា៖</b> ${academicYear}</td>
+              <td style="border: none; padding: 0; text-align: right;"><b>គ្រូបន្ទុកថ្នាក់៖</b> ${teacherName}</td>
+            </tr>
+          </table>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 5%;">ល.រ</th>
+              <th style="width: 20%;">ឈ្មោះភាសាខ្មែរ</th>
+              <th style="width: 20%;">ឈ្មោះឡាតាំង</th>
+              <th style="width: 8%;">ភេទ</th>
+              <th style="width: 15%;">ថ្ងៃកំណើត</th>
+              <th style="width: 15%;">លេខទូរស័ព្ទ</th>
+              <th style="width: 10%;">សីលធម៌</th>
+              <th style="width: 7%;">ចំណាំ</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${students.map((student, idx) => `
+              <tr>
+                <td class="text-center">${idx + 1}</td>
+                <td><b>${student.nameKh}</b></td>
+                <td style="text-transform: uppercase;">${student.nameEn}</td>
+                <td class="text-center ${student.gender === 'ស្រី' ? 'gender-female' : ''}">${student.gender}</td>
+                <td class="text-center">${student.dob || ''}</td>
+                <td class="text-center">${student.phone || ''}</td>
+                <td class="text-center">${student.conduct}</td>
+                <td>${student.remarks || ''}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div class="signature-section">
+          <table style="width: 100%; border: none;">
+            <tr style="border: none;">
+              <td style="border: none; width: 50%;"></td>
+              <td style="border: none; width: 50%; text-align: center;">
+                <p>ធ្វើនៅ ${schoolLabel}, ថ្ងៃទី ${toKhmerDigits(new Date().getDate().toString().padStart(2, '0'))} ខែ ${currentMonthKh} ឆ្នាំ ${toKhmerDigits(new Date().getFullYear())}</p>
+                <p style="font-family: 'Khmer OS Muol Light'; font-size: 10pt; margin-top: 5px; font-weight: bold;">គ្រូបន្ទុកថ្នាក់</p>
+                <div style="height: 60px;"></div>
+                <p><b>${teacherName}</b></p>
+              </td>
+            </tr>
+          </table>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([contentHtml], { type: 'application/msword;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `បញ្ជីឈ្មោះសិស្ស_សៀវភៅសិក្ខាគារិក_${className.replace(/\s+/g, '_')}.doc`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const printStudentRegistry = () => {
     window.print();
   };
@@ -220,14 +493,24 @@ export default function StudentProfileBook({
             <span>បោះពុម្ពបញ្ជីសិស្ស</span>
           </button>
 
-          {/* Export button */}
+          {/* Export Excel button */}
           <button
-            onClick={exportStudentsList}
-            className="flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-4 py-2 rounded-lg transition-colors cursor-pointer text-sm border border-slate-200 h-[38px]"
-            title="ទាញយកបញ្ជីសិស្សទាំងអស់ជាឯកសារ Excel/CSV"
+            onClick={exportToExcel}
+            className="flex items-center justify-center gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-semibold px-4 py-2 rounded-lg transition-colors cursor-pointer text-sm h-[38px]"
+            title="ទាញយកបញ្ជីសិស្សជាឯកសារ Excel (.xls)"
           >
             <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
-            <span>នាំចេញបញ្ជីសិស្ស</span>
+            <span>នាំចេញជា Excel</span>
+          </button>
+
+          {/* Export Word button */}
+          <button
+            onClick={exportToWord}
+            className="flex items-center justify-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-850 border border-blue-200 font-semibold px-4 py-2 rounded-lg transition-colors cursor-pointer text-sm h-[38px]"
+            title="ទាញយកបញ្ជីសិស្សជាឯកសារ Word (.doc)"
+          >
+            <FileText className="h-4 w-4 text-blue-700" />
+            <span>នាំចេញជា Word</span>
           </button>
 
           {/* Add Student Button */}

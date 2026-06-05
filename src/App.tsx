@@ -4,6 +4,22 @@ import { DEFAULT_STUDENTS, MONTH_NAMES } from './data/defaultStudents';
 import { DEFAULT_SUBJECTS } from './data/defaultSubjects';
 import { SEED_SCORES } from './data/seedScores';
 
+// Supabase integration helpers
+import {
+  getSupabaseKeys,
+  getSupabaseClient,
+  mapStudentToDB,
+  mapStudentFromDB,
+  mapSubjectToDB,
+  mapSubjectFromDB,
+  mapMonthScoreToDB,
+  mapMonthScoreFromDB,
+  mapConfigToDB,
+  mapConfigFromDB,
+  fetchPaginatedRows,
+  SUPABASE_SQL_CREATION
+} from './utils/supabaseClient';
+
 // Views
 import StudentProfileBook from './components/StudentProfileBook';
 import ScoreEntrySheet from './components/ScoreEntrySheet';
@@ -31,7 +47,13 @@ import {
   Trash2,
   Plus,
   Building,
-  Sparkles
+  Sparkles,
+  Cloud,
+  Server,
+  Check,
+  AlertCircle,
+  Copy,
+  CheckCircle2
 } from 'lucide-react';
 
 type TabView = 'profiles' | 'scores' | 'ranking' | 'honor' | 'report' | 'class_settings' | 'subjects_admin' | 'database_admin';
@@ -56,8 +78,21 @@ export default function App() {
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
 
+  // Supabase Sync states
+  const [dbSyncing, setDbSyncing] = useState(false);
+  const [dbStatus, setDbStatus] = useState<string>('');
+  const [sbUrl, setSbUrl] = useState('');
+  const [sbKey, setSbKey] = useState('');
+  const [copiedSql, setCopiedSql] = useState(false);
+  const [supabaseConnected, setSupabaseConnected] = useState<'not_configured' | 'success' | 'error'>('not_configured');
+
   // Load from local storage or seed
   useEffect(() => {
+    // Load Supabase keys
+    const keys = getSupabaseKeys();
+    setSbUrl(keys.url);
+    setSbKey(keys.key);
+
     const savedStudents = localStorage.getItem('grade_students');
     const savedSubjects = localStorage.getItem('grade_subjects');
     const savedScores = localStorage.getItem('grade_scores');
@@ -421,104 +456,484 @@ export default function App() {
     );
   };
 
+  // --- Supabase Actions & Integrations ---
+  const saveSupabaseCredentials = (url: string, key: string) => {
+    localStorage.setItem('supabase_url', url);
+    localStorage.setItem('supabase_anon_key', key);
+    setSbUrl(url);
+    setSbKey(key);
+    setSupabaseConnected('not_configured');
+  };
+
+  const handleTestConnection = async () => {
+    const keys = getSupabaseKeys();
+    const activeUrl = keys.url;
+    const activeKey = keys.key;
+
+    if (!activeUrl || !activeKey) {
+      alert('សូមបំពេញ URL និង Anon Key របស់ Supabase ជាមុនសិន!');
+      return;
+    }
+    setDbSyncing(true);
+    setDbStatus('កំពុងផ្ទៀងផ្ទាត់ការតភ្ជាប់ទៅកាន់ Supabase...');
+    const client = getSupabaseClient();
+    if (!client) {
+      setDbStatus('កំហុស៖ មិនអាចបង្កើតដំណភ្ជាប់បានទេ។ សូមពិនិត្យ URL ឡើយវិញ!');
+      setSupabaseConnected('error');
+      setDbSyncing(false);
+      return;
+    }
+
+    try {
+      const { data, error } = await client.from('class_config').select('id').limit(1);
+      if (error) {
+        if (error.message.includes('relation') && error.message.includes('does not exist')) {
+          setDbStatus('តភ្ជាប់ទៅកាន់ API ជោគជ័យ! ប៉ុន្តែមិនទាន់មានតារាងក្នុង Supabase ឡើយ។');
+          setSupabaseConnected('success');
+          alert('តភ្ជាប់បានជោគជ័យ! ប៉ុន្តែតារាង (Tables) មិនទាន់ត្រូវបានបង្កើតឡើងក្នុង Supabase API ឡើយ។ សូមចម្លងកូដ SQL ខាងក្រោមទៅដំណើរការក្នុង Supabase SQL Editor។');
+          return;
+        }
+        throw error;
+      }
+      setDbStatus('ការភ្ជាប់ទៅកាន់ Supabase សកម្ម និងដំណើរការបានល្អប្រសើរ!');
+      setSupabaseConnected('success');
+      alert('ផ្ទៀងផ្ទាត់ការតភ្ជាប់៖ ជោគជ័យពេញលេញ! (Connected Successfully)');
+    } catch (err: any) {
+      console.error(err);
+      setDbStatus(`បរាជ័យ៖ ${err.message || err}`);
+      setSupabaseConnected('error');
+      alert(`កំហុសក្នុងការតភ្ជាប់៖ ${err.message || err}`);
+    } finally {
+      setDbSyncing(false);
+    }
+  };
+
+  const handlePushToSupabase = async () => {
+    const client = getSupabaseClient();
+    if (!client) {
+      alert('សូមរៀបចំការតភ្ជាប់ Supabase ឱ្យបានរួចរាល់សិន!');
+      return;
+    }
+
+    if (!confirm('តើអ្នកពិតជាចង់រុញ (Sync Push) ទិន្នន័យបច្ចុប្បន្នទៅកាន់ Supabase មែនទេ? វានឹងដំណើរការរុញ និងធ្វើបច្ចុប្បន្នភាពទិន្នន័យលើ Cloud និងលុប/ជំនួសទិន្នន័យចាស់ដែលមាន ID ដូចគ្នា។')) {
+      return;
+    }
+
+    setDbSyncing(true);
+    setDbStatus('កំពុងចាប់ផ្ដើមការបញ្ជូនទិន្នន័យ...');
+
+    try {
+      // 1. Convert and push students
+      setDbStatus('កំពុងសម្រង់ និងផ្ញើទិន្នន័យសិស្ស...');
+      const dbStudents = students.map(mapStudentToDB);
+      if (dbStudents.length > 0) {
+        const { error: err1 } = await client.from('students').upsert(dbStudents);
+        if (err1) throw new Error('កំហុសតារាងសិស្ស (students)៖ ' + err1.message);
+      }
+
+      // 2. Convert and push subjects
+      setDbStatus('កំពុងសម្រង់ និងផ្ញើទិន្នន័យមុខវិជ្ជា...');
+      const dbSubjects = subjects.map(mapSubjectToDB);
+      if (dbSubjects.length > 0) {
+        const { error: err2 } = await client.from('subjects').upsert(dbSubjects);
+        if (err2) throw new Error('កំហុសតារាងមុខវិជ្ជា (subjects)៖ ' + err2.message);
+      }
+
+      // 3. Convert and push scores
+      setDbStatus('កំពុងសម្រង់ និងផ្ញើទិន្នន័យពិន្ទុ...');
+      const dbScores = monthScores.map(mapMonthScoreToDB);
+      if (dbScores.length > 0) {
+        const { error: err3 } = await client.from('month_scores').upsert(dbScores);
+        if (err3) throw new Error('កំហុសតារាងពិន្ទុ (month_scores)៖ ' + err3.message);
+      }
+
+      // 4. Convert and push config
+      setDbStatus('កំពុងសម្រង់ និងផ្ញើព័ត៌មានការកំណត់ថ្នាក់...');
+      const dbConfig = mapConfigToDB(config);
+      const { error: err4 } = await client.from('class_config').upsert([dbConfig]);
+      if (err4) throw new Error('កំហុសសរសេរការកំណត់ថ្នាក់ (class_config)៖ ' + err4.message);
+
+      setDbStatus('សមកាលកម្មទិន្នន័យទៅកាន់ Supabase បានជោគជ័យទាំងស្រុង!');
+      alert('បានសមកាលកម្មទិន្នន័យ (Sync Push) ទៅកាន់ Cloud Supabase ជាស្ថាពរ!');
+    } catch (err: any) {
+      console.error(err);
+      setDbStatus(`បរាជ័យ៖ ${err.message || err}`);
+      alert(`កំហុសក្នុងការសរសេរទិន្នន័យ៖ ${err.message || err}`);
+    } finally {
+      setDbSyncing(false);
+    }
+  };
+
+  const handlePullFromSupabase = async () => {
+    const client = getSupabaseClient();
+    if (!client) {
+      alert('សូមរៀបចំការតភ្ជាប់ Supabase ឱ្យបានរួចរាល់សិន!');
+      return;
+    }
+
+    if (!confirm('តើលោកអ្នកពិតជាចង់ទាញយកទិន្នន័យ (Sync Pull) ពី Supabase មែនទេ? វានឹងជំនួសទិន្នន័យបច្ចុប្បន្ននៅក្នុងឧបករណ៍នេះ។')) {
+      return;
+    }
+
+    setDbSyncing(true);
+    setDbStatus('កំពុងចាប់ផ្ដើមទាញយកទិន្នន័យ...');
+
+    try {
+      // 1. Fetch students utilizing chunk-iterator for >1000 records
+      setDbStatus('កំពុងទាញយកទិន្នន័យសិស្ស (Chunk-Pagination > 1000 ច្រើនជួរ...)');
+      const studentsRaw = await fetchPaginatedRows(client, 'students');
+      const loadedStudents = studentsRaw.map(mapStudentFromDB);
+
+      // 2. Fetch subjects
+      setDbStatus('កំពុងទាញយកទិន្នន័យមុខវិជ្ជា...');
+      const subjectsRaw = await fetchPaginatedRows(client, 'subjects');
+      const loadedSubjects = subjectsRaw.map(mapSubjectFromDB);
+
+      // 3. Fetch scores
+      setDbStatus('កំពុងទាញយកព័ត៌មានទិន្នន័យពិន្ទុ...');
+      const scoresRaw = await fetchPaginatedRows(client, 'month_scores');
+      const loadedScores = scoresRaw.map(mapMonthScoreFromDB);
+
+      // 4. Fetch config
+      setDbStatus('កំពុងទាញយកការកំណត់ថ្នាក់...');
+      const { data: configRaw, error: configErr } = await client
+        .from('class_config')
+        .select('*')
+        .eq('id', 'current_config')
+        .maybeSingle();
+
+      if (configErr) throw new Error('កំហុសអានព័ត៌មានថ្នាក់៖ ' + configErr.message);
+
+      let loadedConfig = config;
+      if (configRaw) {
+        loadedConfig = mapConfigFromDB(configRaw);
+      }
+
+      const totalPulled = loadedStudents.length + loadedSubjects.length + loadedScores.length;
+      setDbStatus(`បានទាញទិន្នន័យបានជោគជ័យ! ចំនួនសរុប៖ ${totalPulled} ជួរ (សិស្ស: ${loadedStudents.length}, មុខវិជ្ជា: ${loadedSubjects.length}, ពិន្ទុ: ${loadedScores.length})`);
+      
+      saveState(loadedStudents, loadedSubjects, loadedScores, loadedConfig);
+      alert(`ទាញយកទិន្នន័យជោគជ័យ! បញ្ចូលបាន៖ សិស្ស ${loadedStudents.length} នាក់, មុខវិជ្ជា ${loadedSubjects.length} និង ពិន្ទុ ${loadedScores.length} ជួរ។ (លក្ខខណ្ឌ pagination > ១០០០ ជួរដំណើរការល្អប្រសើរ!)`);
+    } catch (err: any) {
+      console.error(err);
+      setDbStatus(`បរាជ័យទាញយក៖ ${err.message || err}`);
+      alert(`កំហុសក្នុងការទាញយក៖ ${err.message || err}`);
+    } finally {
+      setDbSyncing(false);
+    }
+  };
+
   const renderDatabaseSettings = () => {
+    const keys = getSupabaseKeys();
+
     return (
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-        <div className="pb-4 border-b border-slate-100">
-          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <Database className="h-5 w-5 text-blue-700" />
-            <span>ប្រព័ន្ធគ្រប់គ្រងមូលដ្ឋានទិន្នន័យ (System Data & Maintenance)</span>
-          </h3>
-          <p className="text-xs text-slate-400 mt-1">បម្រុងទុក ស្ដារ ឬកំណត់ទិន្នន័យពិន្ទុ និងព័ត៌មានលម្អិតផ្សេងៗរបស់សិស្សទូទាំងកម្មវិធីសិក្សា។</p>
+      <div className="space-y-6">
+        {/* Core Maintenance Panel */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
+          <div className="pb-4 border-b border-slate-100">
+            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <Database className="h-5 w-5 text-blue-750" />
+              <span>ប្រព័ន្ធគ្រប់គ្រងមូលដ្ឋានទិន្នន័យ (System Data & Maintenance)</span>
+            </h3>
+            <p className="text-xs text-slate-400 mt-1">បម្រុងទុក ស្ដារ ឬកំណត់ទិន្នន័យពិន្ទុ និងព័ត៌មានលម្អិតផ្សេងៗរបស់សិស្សទូទាំងកម្មវិធីសិក្សាដោយផ្ទាល់។</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* Database Backup & Restore */}
+            <div className="border border-slate-150 rounded-2xl p-5 space-y-4 bg-slate-50/30">
+              <h4 className="text-xs uppercase font-extrabold text-slate-455 tracking-wider block">ការរក្សាទុក និងនាំចូលទិន្នន័យបម្រុង</h4>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                ទាញយកឯកសារបម្រុងទុក (JSON) ដើម្បីរក្សាទុកពិន្ទុនិងប្រវត្តិរូបសិស្សជាឯកសារនៅក្នុងឧបករណ៍របស់អ្នក ឬនាំចូលមកវិញនៅពេលណាក៏បាន។
+              </p>
+              
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <button
+                  onClick={exportDatabase}
+                  className="flex items-center gap-2 py-2 px-3.5 bg-blue-750 hover:bg-blue-800 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-xs"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>បម្រុងទុក (Backup JSON)</span>
+                </button>
+
+                <label className="flex items-center gap-2 py-2 px-3.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-250 rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-xs">
+                  <Upload className="h-4 w-4 text-slate-550" />
+                  <span>ស្ដារទិន្នន័យ (Restore JSON)</span>
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={importDatabase}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* Demo Score Operations */}
+            <div className="border border-slate-150 rounded-2xl p-5 space-y-4 bg-slate-50/30">
+              <h4 className="text-xs uppercase font-extrabold text-amber-750 tracking-wider block">ពិន្ទុសាកល្បង និងឧបករណ៍ជំរុះពិន្ទុ</h4>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                បំពេញពិន្ទុសាកល្បងដោយស្វ័យប្រវត្តសម្រាប់សិស្សទាំងអស់សម្រាប់ការសាកល្បង ឬសម្អាតទិន្នន័យពិន្ទុទាំងអស់ដើម្បីសរសេរថ្មី។
+              </p>
+
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <button
+                  onClick={() => {
+                    handleAutofillScores();
+                    alert('ប្រឡងបំពេញពិន្ទុគំរូសាកល្បង (Demo Scores) ជូនសិស្សគ្រប់គ្នាដោយជោគជ័យ!');
+                  }}
+                  className="flex items-center gap-2 py-2 px-3.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 rounded-xl text-xs font-bold cursor-pointer transition-colors"
+                >
+                  <Sparkles className="h-4 w-4 text-amber-700" />
+                  <span>បញ្ចូលពិន្ទុគំរូ (Demo Auto-Fill)</span>
+                </button>
+
+                <button
+                  onClick={handleClearScores}
+                  className="flex items-center gap-2 py-2 px-3.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-900 rounded-xl text-xs font-bold cursor-pointer transition-colors"
+                >
+                  <Trash2 className="h-4 w-4 text-rose-700" />
+                  <span>សម្អាតពិន្ទុទាំងអស់ (Clear)</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {/* Database Backup & Restore */}
-          <div className="border border-slate-150 rounded-2xl p-5 space-y-4 bg-slate-50/30">
-            <h4 className="text-xs uppercase font-extrabold text-slate-455 tracking-wider block">ការរក្សាទុក និងនាំចូលទិន្នន័យបម្រុង</h4>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              ទាញយកឯកសារបម្រុងទុក (JSON) ដើម្បីរក្សាទុកពិន្ទុនិងប្រវត្តិរូបសិស្សជាឯកសារនៅក្នុងឧបករណ៍របស់អ្នក ឬនាំចូលមកវិញនៅពេលណាក៏បាន។
-            </p>
+        {/* Supabase Dynamic Cloud Persistence Area */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
+          <div className="pb-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <Cloud className="h-5 w-5 text-indigo-650" />
+                <span>ការតភ្ជាប់មូលដ្ឋានទិន្នន័យពពក Supabase (Supabase Integration)</span>
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">រៀបចំ និងផ្ទុករក្សាទុកទិន្នន័យគ្រប់ជ្រុងជ្រោយរបស់សាលារបស់លោកអ្នកដោយសុវត្ថិភាពខ្ពស់បំផុតនៅលើ Cloud។</p>
+            </div>
             
-            <div className="flex flex-wrap items-center gap-3 pt-2">
-              <button
-                onClick={exportDatabase}
-                className="flex items-center gap-2 py-2 px-3.5 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-xs"
-              >
-                <Download className="h-4 w-4" />
-                <span>បម្រុងទុក (Backup JSON)</span>
-              </button>
-
-              <label className="flex items-center gap-2 py-2 px-3.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-250 rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-xs">
-                <Upload className="h-4 w-4 text-slate-550" />
-                <span>ស្ដារទិន្នន័យ (Restore JSON)</span>
-                <input
-                  type="file"
-                  accept=".json"
-                  onChange={importDatabase}
-                  className="hidden"
-                />
-              </label>
+            <div className="shrink-0 flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-400">ស្ថានភាព៖</span>
+              {keys.isFromEnv ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-150">
+                  <Check className="h-3 w-3" />
+                  <span>.env / Vercel (ភ្ជាប់ស្រាប់)</span>
+                </span>
+              ) : keys.hasConfig ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-150">
+                  <Server className="h-3 w-3" />
+                  <span>Configured (ការកំណត់ក្នុងកុំព្យូទ័រ)</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-150">
+                  <AlertCircle className="h-3 w-3" />
+                  <span>មិនទាន់កំណត់</span>
+                </span>
+              )}
             </div>
           </div>
 
-          {/* Demo Score Operations */}
-          <div className="border border-slate-150 rounded-2xl p-5 space-y-4 bg-slate-50/30">
-            <h4 className="text-xs uppercase font-extrabold text-amber-750 tracking-wider block">ពិន្ទុសាកល្បង និងឧបករណ៍ជំរុះពិន្ទុ</h4>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              បំពេញពិន្ទុសាកល្បងដោយស្វ័យប្រវត្តសម្រាប់សិស្សទាំងអស់សម្រាប់ការសាកល្បង ឬសម្អាតទិន្នន័យពិន្ទុទាំងអស់ដើម្បីសរសេរថ្មី។
-            </p>
+          {/* Sync Operations Card Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* Supabase configuration settings input */}
+            <div className="lg:col-span-1 bg-slate-50/70 p-5 rounded-2xl border border-slate-180 space-y-4">
+              <h4 className="text-xs font-extrabold uppercase tracking-widest text-slate-700 flex items-center gap-1.5">
+                <Settings className="h-4 w-4 text-slate-500" />
+                <span>ការកំណត់ការភ្ជាប់</span>
+              </h4>
+              <p className="text-[11px] text-slate-450 leading-relaxed font-medium">
+                បញ្ចូលព័ត៌មានសម្ងាត់ API របស់ Supabase ដើម្បីរក្សាទុកទិន្នន័យពិន្ទុ។ គម្រោងឥតគិតថ្លៃ (Free Tier) ប្រឈមនឹងការកំណត់ល្បឿន ដូច្នេះប្រព័ន្ធត្រូវបានរៀបចំលក្ខខណ្ឌពិសេសដើម្បីទាញយកទិន្នន័យលើសពី ១០០០ ជួរដោយសុវត្ថិភាព!
+              </p>
 
-            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <div className="space-y-4 pt-2">
+                {/* Product URL Input */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase text-slate-500 block">Supabase Project URL</label>
+                  <input
+                    type="text"
+                    disabled={keys.isFromEnv}
+                    placeholder="https://your-project.supabase.co"
+                    value={sbUrl}
+                    onChange={(e) => {
+                      setSbUrl(e.target.value);
+                      saveSupabaseCredentials(e.target.value.trim(), sbKey);
+                    }}
+                    className={`w-full px-3 py-2 text-xs border border-slate-250 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-150 font-mono text-slate-700 ${
+                      keys.isFromEnv ? 'bg-slate-100 border-slate-150 text-slate-400 cursor-not-allowed' : 'bg-white'
+                    }`}
+                  />
+                </div>
+
+                {/* API Anon Key Input */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase text-slate-500 block">Supabase Anon Key</label>
+                  <input
+                    type="password"
+                    disabled={keys.isFromEnv}
+                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    value={sbKey}
+                    onChange={(e) => {
+                      setSbKey(e.target.value);
+                      saveSupabaseCredentials(sbUrl, e.target.value.trim());
+                    }}
+                    className={`w-full px-3 py-2 text-xs border border-slate-250 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-150 font-mono text-slate-700 ${
+                      keys.isFromEnv ? 'bg-slate-100 border-slate-150 text-slate-400 cursor-not-allowed' : 'bg-white'
+                    }`}
+                  />
+                </div>
+
+                {keys.isFromEnv && (
+                  <div className="p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl">
+                    <p className="text-[10px] font-bold text-indigo-855 leading-normal">
+                      🔒 បានចាក់សោស្វ័យប្រវត្តពីព្រោះព័ត៌មានសម្ងាត់ត្រូវបានតម្លើងរួចជាស្រេចនៅក្នុងឯកសារសុវត្ថិភាព .env ឬ Vercel Dashboard ។
+                    </p>
+                  </div>
+                )}
+                
+                {dbStatus && (
+                  <div className="p-2.5 rounded-lg text-[11px] font-semibold bg-blue-50 border border-blue-150 text-blue-800 animate-pulse">
+                    <span>📢 ស្ថានភាព៖ {dbStatus}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Sync actions operations and dashboard control */}
+            <div className="lg:col-span-2 space-y-5">
+              <div className="border border-slate-200 rounded-2xl bg-slate-50/30 p-5 space-y-4">
+                <h4 className="text-xs uppercase font-extrabold text-slate-705 tracking-wider block">ការសមកាលកម្មទិន្នន័យ (Cloud Synchronization Controls)</h4>
+                <p className="text-xs text-slate-500 leading-normal">
+                  លោកអ្នកអាចរុញ (Push) ទិន្នន័យបច្ចុប្បន្នដែលនៅក្នុងឧបករណ៍មូលដ្ឋាននេះទៅក្នុង Cloud ដើម្បីបម្រុងទុក ឬទាញយកទិន្នន័យមកវិញ (Pull) នៅលើឧបករណ៍ថ្មីបានគ្រប់ពេលវេលា។
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {/* Test Connection Button */}
+                  <button
+                    onClick={handleTestConnection}
+                    disabled={dbSyncing}
+                    className="flex items-center justify-center gap-1.5 py-3 px-4 bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-755 border border-slate-250 rounded-xl text-xs font-extrabold cursor-pointer transition-all hover:scale-[1.01] shadow-xs active:scale-95 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`h-4 w-4 text-slate-600 ${dbSyncing ? 'animate-spin' : ''}`} />
+                    <span>ផ្ទៀងផ្ទាត់ការតភ្ជាប់</span>
+                  </button>
+
+                  {/* Sync Pull Button */}
+                  <button
+                    onClick={handlePullFromSupabase}
+                    disabled={dbSyncing || !keys.hasConfig}
+                    className="flex items-center justify-center gap-1.5 py-3 px-4 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-extrabold cursor-pointer transition-all hover:scale-[1.01] shadow-xs active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="ទាញទិន្នន័យពី Supabase (Pagination > 1000 ច្រើនជួរសកម្ម)"
+                  >
+                    <Download className="h-4 w-4" />
+                    <span>ទាញទិន្នន័យមកវិញ (Pull)</span>
+                  </button>
+
+                  {/* Sync Push Button */}
+                  <button
+                    onClick={handlePushToSupabase}
+                    disabled={dbSyncing || !keys.hasConfig}
+                    className="flex items-center justify-center gap-1.5 py-3 px-4 bg-indigo-750 hover:bg-indigo-800 text-white rounded-xl text-xs font-extrabold cursor-pointer transition-all hover:scale-[1.01] shadow-xs active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Upload className="h-4 w-4" />
+                    <span>សមកាលកម្មទៅ Cloud (Push)</span>
+                  </button>
+                </div>
+
+                <div className="p-3.5 bg-amber-50/70 border border-amber-100 rounded-xl text-xs text-amber-900 leading-relaxed">
+                  💡 <strong>ចំណុចពិសេសសម្រាប់ការទាញទិន្នន័យលើសពី ១០០០ ជួរ ( ফ্রি Tier bypass)៖</strong> ដោយហេតុតែទំហំ API Response របស់ Supabase Fee ត្រូវបានលីមីតត្រឹម ១០០០ ជួរក្នុងមួយសំណើ យើងបានបន្ថែមលក្ខខណ្ឌ <strong>Cursor-Pagination Loop</strong> ជួយបំបែកសំណើទាញយកទិន្នន័យជាកញ្ចប់ៗម្ដង ១០០០ រហូតដល់អស់ រួចផ្គុំបញ្ចូលគ្នាវិញ ទោះជាទិន្នន័យរបស់អ្នកមានដល់ ១០,០០០ ជួរក៏គ្មានបញ្ហា!
+                </div>
+              </div>
+
+              {/* Vercel Environment variables setup guide */}
+              <div className="border border-indigo-100 bg-indigo-50/20 rounded-2xl p-5 space-y-3.5">
+                <div className="flex items-center gap-2 text-indigo-800">
+                  <Building className="h-4 w-4 text-indigo-700" />
+                  <span className="font-bold text-xs uppercase tracking-wider block">សេចក្ដីណែនាំអំពីការកំណត់ព័ត៌មាន API ក្នុង Vercel (Vercel Setup Guide)</span>
+                </div>
+                
+                <p className="text-slate-600 text-xs leading-relaxed">
+                  ដើម្បីឱ្យការតភ្ជាប់ Supabase របស់លោកអ្នកមានស្ថិរភាព និងរក្សាបាននូវសុវត្ថិភាពគោកមិនបាត់បង់ពេល Deploy ទៅកាន់ <strong>Vercel</strong> នោះ សូមអនុវត្តជំហានខាងក្រោម៖
+                </p>
+
+                <ol className="text-xs text-slate-550 list-decimal pl-4.5 space-y-1.5 leading-relaxed">
+                  <li>ចូលទៅកាន់គណនី <strong>Vercel Desktop Dashboard</strong> របស់អ្នក រួចជ្រើសរើសយកគម្រោងកម្មវិធីនេះ។</li>
+                  <li>ចុចលើផ្ទាំង <strong>Settings</strong> រួចជ្រើសរើសយកម៉ឺនុយ <strong>Environment Variables</strong> ពីខាងឆ្វេង។</li>
+                  <li>បន្ថែមអថេរថ្មីទី១៖ ដាក់ <code>VITE_SUPABASE_URL</code> ជា <strong>Key</strong> និងចម្លងយក URL របស់ Supabase មករៀបចំដាក់ក្នុងប្រអប់ <strong>Value</strong> ។</li>
+                  <li>បន្ថែមអថេរថ្មីទី២៖ ដាក់ <code>VITE_SUPABASE_ANON_KEY</code> ជា <strong>Key</strong> និងចម្លងយក Anon Key របស់ Supabase មករៀបចំដាក់ក្នុងប្រអប់ <strong>Value</strong> ។</li>
+                  <li>ចុចប៊ូតុង <strong>Save</strong> រួចហើយចុចពាក្យ <strong>Redeploy</strong> Project របស់លោកអ្នកនៅក្នុង Vercel ជាការស្រេច!</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+
+          {/* Collapsible Supabase SQL Script area for copy-ready schema creation */}
+          <div className="border border-slate-200 rounded-2xl bg-slate-50/50 p-4 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h4 className="text-xs font-extrabold uppercase tracking-widest text-slate-700">សំណេរកូដបង្កើតតារាង SQL (Database Setup SQL Script)</h4>
+                <p className="text-[11px] text-slate-450 mt-0.5">ចម្លងកូដរៀបចំរចនាសម្ព័ន្ធនេះ យកទៅដំណើរការក្នុង Supabase SQL Editor ដើម្បីដំណើរការប្រព័ន្ធបានជោគជ័យទាំងស្រុង។</p>
+              </div>
               <button
                 onClick={() => {
-                  handleAutofillScores();
-                  alert('ប្រឡងបំពេញពិន្ទុគំរូសាកល្បង (Demo Scores) ជូនសិស្សគ្រប់គ្នាដោយជោគជ័យ!');
+                  navigator.clipboard.writeText(SUPABASE_SQL_CREATION);
+                  setCopiedSql(true);
+                  setTimeout(() => setCopiedSql(false), 2000);
                 }}
-                className="flex items-center gap-2 py-2 px-3.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 rounded-xl text-xs font-bold cursor-pointer transition-colors"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold cursor-pointer transition-colors shrink-0 ${
+                  copiedSql 
+                    ? 'bg-emerald-600 text-white' 
+                    : 'bg-white text-slate-800 hover:bg-slate-100 border border-slate-250 shadow-inner'
+                }`}
               >
-                <Sparkles className="h-4 w-4 text-amber-700" />
-                <span>បញ្ចូលពិន្ទុគំរូ (Demo Auto-Fill)</span>
-              </button>
-
-              <button
-                onClick={handleClearScores}
-                className="flex items-center gap-2 py-2 px-3.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-900 rounded-xl text-xs font-bold cursor-pointer transition-colors"
-              >
-                <Trash2 className="h-4 w-4 text-rose-700" />
-                <span>សម្អាតពិន្ទុទាំងអស់ (Clear)</span>
+                {copiedSql ? (
+                  <>
+                    <Check className="h-3 w-3" />
+                    <span>បានចម្លងជោគជ័យ!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3 w-3 text-slate-550" />
+                    <span>ចម្លងកូដ SQL (Copy Code)</span>
+                  </>
+                )}
               </button>
             </div>
+
+            <pre className="p-3 bg-slate-900 text-amber-300 font-mono text-[10px] rounded-xl overflow-x-auto max-h-[180px] border border-slate-800 leading-relaxed shadow-inner">
+              {SUPABASE_SQL_CREATION}
+            </pre>
           </div>
         </div>
 
-        {/* Dangerous Action Block */}
-        <div className="border border-rose-100 bg-rose-50/20 rounded-2xl p-5 space-y-3">
-          <div className="flex items-center gap-2 text-rose-700">
-            <Shield className="h-5 w-5 fill-rose-50 stroke-rose-750" />
-            <span className="font-extrabold text-xs uppercase tracking-wider block">ការស្ដារប្រព័ន្ធដំបូងបង្អស់ (System Factory Reset)</span>
-          </div>
-          <div className="flex items-center justify-between text-xs gap-4 flex-wrap">
-            <p className="text-slate-550 max-w-[600px] leading-relaxed">
-              ការស្ដារប្រព័ន្ធដំបូងនឹងលុបចោលទិន្នន័យបន្ថែមទាំងអស់ដែលលោកអ្នកបានបញ្ចូល និងទាញយកទិន្នន័យគំរូសិស្ស ២០នាក់លំនាំដើមរបស់កម្មវិធីជាថ្មីឡើងវិញ។
-            </p>
-            <button
-              onClick={() => {
-                if (confirm('តើលោកអ្នកពិតជាចង់ស្ដារទិន្នន័យសិស្ស និងពិន្ទុទាំងអស់ទៅកាន់លំនាំដើមប្រព័ន្ធមែនទេ?')) {
-                  seedDefaults();
-                  alert('ប្រព័ន្ធត្រូវបានកំណត់ស្ដារទៅកាន់លំនាំដើមរោងចក្រដោយជោគជ័យ!');
-                }
-              }}
-              className="flex items-center gap-2 py-2 px-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold cursor-pointer transition-all text-xs shadow-xs"
-            >
-              <RefreshCw className="h-4 w-4 animate-spin-slow" />
-              <span>កំណត់ទៅលំនាំដើម (Factory Reset)</span>
-            </button>
+        {/* Factory Reset Area */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+          <div className="border border-rose-100 bg-rose-50/20 rounded-2xl p-5 space-y-3">
+            <div className="flex items-center gap-2 text-rose-700">
+              <Shield className="h-5 w-5 fill-rose-50 stroke-rose-750" />
+              <span className="font-extrabold text-xs uppercase tracking-wider block">ការស្ដារប្រព័ន្ធដំបូងបង្អស់ (System Factory Reset)</span>
+            </div>
+            <div className="flex items-center justify-between text-xs gap-4 flex-wrap">
+              <p className="text-slate-550 max-w-[600px] leading-relaxed">
+                ការស្ដារប្រព័ន្ធដំបូងនឹងលុបចោលទិន្នន័យបន្ថែមទាំងអស់ដែលលោកអ្នកបានបញ្ចូល និងទាញយកទិន្នន័យគំរូសិស្ស ២០នាក់លំនាំដើមរបស់កម្មវិធីជាថ្មីឡើងវិញ។
+              </p>
+              <button
+                onClick={() => {
+                  if (confirm('តើលោកអ្នកពិតជាចង់ស្ដារទិន្នន័យសិស្ស និងពិន្ទុទាំងអស់ទៅកាន់លំនាំដើមប្រព័ន្ធមែនទេ?')) {
+                    seedDefaults();
+                    alert('ប្រព័ន្ធត្រូវបានកំណត់ស្ដារទៅកាន់លំនាំដើមរោងចក្រដោយជោគជ័យ!');
+                  }
+                }}
+                className="flex items-center gap-2 py-2 px-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold cursor-pointer transition-all text-xs shadow-xs"
+              >
+                <RefreshCw className="h-4 w-4 animate-spin-slow" />
+                <span>កំណត់ទៅលំនាំដើម (Factory Reset)</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
     );
   };
+
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
