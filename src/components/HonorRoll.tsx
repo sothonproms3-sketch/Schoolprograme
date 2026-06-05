@@ -853,7 +853,7 @@ export default function HonorRoll({
                       <div className="grid grid-cols-2 text-[11px] text-slate-600 pt-6 border-slate-200/40">
                         <div>
                           <p className="font-moul text-[9px] leading-relaxed">បានឃើញ និងឯកភាព</p>
-                          <p className="text-slate-500 py-1 font-semibold">នាយកសាលាបឋមសិក្សា</p>
+                          <p className="text-slate-500 py-1 font-semibold">នាយក/នាយិកាសាលា</p>
                           <div className="h-10"></div>
                           <p className="font-bold text-slate-700">................................................</p>
                         </div>

@@ -60,10 +60,10 @@ export default function StudentProfileBook({
   const [remarks, setRemarks] = useState('');
 
   // Customizable Administrative Header Tags for MoEYS standard print registry
-  const [ministryLabel, setMinistryLabel] = useState('ក្រសួងអប់រំ យុវជន និងកីឡា');
-  const [provincialLabel, setProvincialLabel] = useState('មន្ទីរអប់រំ យុវជន និងកីឡាខេត្តបាត់ដំបង');
-  const [districtLabel, setDistrictLabel] = useState('ការិយាល័យអប់រំ យុវជន និងកីឡាស្រុកសង្កែ');
-  const [schoolLabel, setSchoolLabel] = useState('សាលាបឋមសិក្សាវត្តចចង');
+  const [ministryLabel, setMinistryLabel] = useState(() => localStorage.getItem('label_ministry') || 'ក្រសួងអប់រំ យុវជន និងកីឡា');
+  const [provincialLabel, setProvincialLabel] = useState(() => localStorage.getItem('label_provincial') || 'មន្ទីរអប់រំ យុវជន និងកីឡាខេត្តបាត់ដំបង');
+  const [districtLabel, setDistrictLabel] = useState(() => localStorage.getItem('label_district') || 'ការិយាល័យអប់រំ យុវជន និងកីឡាស្រុកសង្កែ');
+  const [schoolLabel, setSchoolLabel] = useState(() => localStorage.getItem('label_school') || 'សាលាបឋមសិក្សាវត្តចចង');
 
   const openAddForm = () => {
     setIsEditing(false);
@@ -385,15 +385,22 @@ export default function StudentProfileBook({
         </style>
       </head>
       <body>
-        <div>
-          <div class="ministry">${ministryLabel}</div>
-          <div class="country">ព្រះរាជាណាចក្រកម្ពុជា</div>
-        </div>
-        <div style="clear: both;"></div>
-        <div>
-          <div class="school">${provincialLabel}<br>${districtLabel}<br><b>សាលា៖ ${schoolLabel}</b></div>
-          <div class="motto">ជាតិ សាសនា ព្រះមហាក្សត្រ</div>
-        </div>
+        <table style="width: 100%; border: none; margin-bottom: 20px;">
+          <tr>
+            <td style="width: 38%; border: none; text-align: left; vertical-align: top; padding: 0;">
+              <span class="font-moul" style="font-size: 10pt; color: #1e293b;">${ministryLabel}</span><br>
+              <span class="font-moul" style="font-size: 8.5pt; color: #334155;">${provincialLabel}</span><br>
+              <span style="font-size: 9pt; font-weight: bold; color: #475569;">${districtLabel}</span><br>
+              <span style="font-size: 9pt; font-weight: bold; color: #1e293b;">សាលា៖ <u>${schoolLabel}</u></span>
+            </td>
+            <td style="width: 34%; border: none; text-align: center; vertical-align: top; padding: 0;">
+              <span class="font-moul" style="font-size: 11pt; color: #0f172a;">ព្រះរាជាណាចក្រកម្ពុជា</span><br>
+              <span class="font-moul" style="font-size: 9.5pt; color: #1e293b; letter-spacing: 1px;">ជាតិ សាសនា ព្រះមហាក្សត្រ</span><br>
+              <div style="font-size: 8pt; color: #b45309; text-align: center; margin-top: 3px;">~ ~ ~ * ~ ~ ~</div>
+            </td>
+            <td style="width: 28%; border: none; text-align: right; vertical-align: top; padding: 0;"></td>
+          </tr>
+        </table>
         
         <div style="clear: both; height: 20px;"></div>
 
@@ -441,12 +448,22 @@ export default function StudentProfileBook({
         <div class="signature-section">
           <table style="width: 100%; border: none;">
             <tr style="border: none;">
-              <td style="border: none; width: 50%;"></td>
-              <td style="border: none; width: 50%; text-align: center;">
-                <p>ធ្វើនៅ ${schoolLabel}, ថ្ងៃទី ${toKhmerDigits(new Date().getDate().toString().padStart(2, '0'))} ខែ ${currentMonthKh} ឆ្នាំ ${toKhmerDigits(new Date().getFullYear())}</p>
-                <p style="font-family: 'Khmer OS Muol Light'; font-size: 10pt; margin-top: 5px; font-weight: bold;">គ្រូបន្ទុកថ្នាក់</p>
+              <td style="border: none; width: 50%; text-align: center; vertical-align: top; padding: 0;">
+                <p style="font-weight: bold; color: #64748b; margin-bottom: 2px;">បានឃើញ និងឯកភាព</p>
+                <p class="font-moul" style="font-size: 9.5pt; color: #1e293b; margin-top: 1px;">នាយក/នាយិកា</p>
                 <div style="height: 60px;"></div>
-                <p><b>${teacherName}</b></p>
+                <p style="color: #94a3b8;">................................................</p>
+              </td>
+              <td style="border: none; width: 50%; text-align: center; vertical-align: top; padding: 0;">
+                <p style="font-style: italic; font-weight: bold; font-size: 9.5pt; color: #78350f; margin-bottom: 2px;">
+                  ថ្ងៃសុក្រ ៧កើត ខែមិគសិរ ឆ្នាំជូត ឯកស័ក ២០២៦
+                </p>
+                <p style="font-size: 9.5pt; font-weight: bold; color: #1e293b; margin-top: 1px; margin-bottom: 3px;">
+                  ធ្វើនៅ ${schoolLabel}, ថ្ងៃទី ${toKhmerDigits(new Date().getDate().toString().padStart(2, '0'))} ខែ ${currentMonthKh} ឆ្នាំ ${toKhmerDigits(new Date().getFullYear())}
+                </p>
+                <p class="font-moul" style="font-size: 9.5pt; color: #1e293b; margin-top: 1px;">គ្រូបន្ទុកថ្នាក់</p>
+                <div style="height: 60px;"></div>
+                <p style="font-weight: bold; color: #0f172a; font-size: 11pt;">${teacherName}</p>
               </td>
             </tr>
           </table>
@@ -533,7 +550,10 @@ export default function StudentProfileBook({
           <input
             type="text"
             value={ministryLabel}
-            onChange={(e) => setMinistryLabel(e.target.value)}
+            onChange={(e) => {
+              setMinistryLabel(e.target.value);
+              localStorage.setItem('label_ministry', e.target.value);
+            }}
             className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
@@ -542,7 +562,10 @@ export default function StudentProfileBook({
           <input
             type="text"
             value={provincialLabel}
-            onChange={(e) => setProvincialLabel(e.target.value)}
+            onChange={(e) => {
+              setProvincialLabel(e.target.value);
+              localStorage.setItem('label_provincial', e.target.value);
+            }}
             className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
@@ -551,7 +574,10 @@ export default function StudentProfileBook({
           <input
             type="text"
             value={districtLabel}
-            onChange={(e) => setDistrictLabel(e.target.value)}
+            onChange={(e) => {
+              setDistrictLabel(e.target.value);
+              localStorage.setItem('label_district', e.target.value);
+            }}
             className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
@@ -560,7 +586,10 @@ export default function StudentProfileBook({
           <input
             type="text"
             value={schoolLabel}
-            onChange={(e) => setSchoolLabel(e.target.value)}
+            onChange={(e) => {
+              setSchoolLabel(e.target.value);
+              localStorage.setItem('label_school', e.target.value);
+            }}
             className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
@@ -1085,7 +1114,7 @@ export default function StudentProfileBook({
         <div className="mt-12 grid grid-cols-2 text-center text-xs text-slate-705 pt-6">
           <div>
             <p className="font-semibold text-slate-500">បានឃើញ និងឯកភាព</p>
-            <p className="font-moul text-[8.5px] pt-1 leading-relaxed">នាយកសាលា</p>
+            <p className="font-moul text-[8.5px] pt-1 leading-relaxed">នាយក/នាយិកា</p>
             <div className="h-16 flex items-center justify-center relative select-none">
               {/* Decorative stamp element behind */}
               <div className="absolute border border-dotted border-rose-500/10 rounded-full h-11 w-11 flex items-center justify-center rotate-12 -z-10 no-print">

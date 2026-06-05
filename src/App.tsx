@@ -1147,6 +1147,10 @@ export default function App() {
                 onAutofillScores={handleAutofillScores}
                 onClearScores={handleClearScores}
                 isAdmin={false} // Teacher workspace! Hide subject management controls, reset DB, autofill
+                className={config.className}
+                teacherName={config.teacherName}
+                academicYear={config.academicYear}
+                selectedMonth={config.selectedMonth}
               />
             )}
             {activeTab === 'ranking' && (

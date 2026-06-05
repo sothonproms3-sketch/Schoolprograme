@@ -519,15 +519,22 @@ export default function ReportCard({
         </style>
       </head>
       <body>
-        <div>
-          <div class="ministry">${ministryLabel}</div>
-          <div class="country">ព្រះរាជាណាចក្រកម្ពុជា</div>
-        </div>
-        <div style="clear: both;"></div>
-        <div>
-          <div class="school">${provincialLabel}<br>${districtLabel}<br><b>សាលា៖ ${schoolLabel}</b></div>
-          <div class="motto">ជាតិ សាសនា ព្រះមហាក្សត្រ</div>
-        </div>
+        <table style="width: 100%; border: none; margin-bottom: 20px;">
+          <tr>
+            <td style="width: 38%; border: none; text-align: left; vertical-align: top; padding: 0;">
+              <span style="font-family: 'Khmer OS Muol Light'; font-size: 9.5pt; color: #1e293b; font-weight: bold;">${ministryLabel}</span><br>
+              <span style="font-family: 'Khmer OS Muol Light'; font-size: 8.5pt; color: #334155; font-weight: bold;">${provincialLabel}</span><br>
+              <span style="font-size: 9pt; font-weight: bold; color: #475569;">${districtLabel}</span><br>
+              <span style="font-size: 9pt; font-weight: bold; color: #1e293b;">សាលា៖ <u>${schoolLabel}</u></span>
+            </td>
+            <td style="width: 34%; border: none; text-align: center; vertical-align: top; padding: 0;">
+              <span style="font-family: 'Khmer OS Muol Light'; font-size: 11pt; color: #0f172a; font-weight: bold;">ព្រះរាជាណាចក្រកម្ពុជា</span><br>
+              <span style="font-family: 'Khmer OS Muol Light'; font-size: 9.5pt; color: #1e293b; font-weight: bold; letter-spacing: 1px;">ជាតិ សាសនា ព្រះមហាក្សត្រ</span><br>
+              <div style="font-size: 8pt; color: #b45309; text-align: center; margin-top: 3px;">~ ~ ~ * ~ ~ ~</div>
+            </td>
+            <td style="width: 28%; border: none; text-align: right; vertical-align: top; padding: 0;"></td>
+          </tr>
+        </table>
         
         <div style="clear: both; height: 15px;"></div>
 
@@ -602,7 +609,7 @@ export default function ReportCard({
             <tr style="border: none;">
               <td style="border: none; width: 50%; text-align: left;">
                 <p>បានឃើញ និងឯកភាព</p>
-                <p style="font-family: 'Khmer OS Muol Light'; font-size: 9.5pt; margin-top: 5px; font-weight: bold;">នាយកសាលា</p>
+                <p style="font-family: 'Khmer OS Muol Light'; font-size: 9.5pt; margin-top: 5px; font-weight: bold;">នាយក/នាយិកា</p>
                 <div style="height: 60px;"></div>
                 <p>................................................</p>
               </td>
@@ -1197,7 +1204,7 @@ export default function ReportCard({
 
                   <div className="pt-10 flex flex-col items-center text-center">
                     <p className="text-[9px] font-semibold text-slate-500 leading-none">បានឃើញ និងឯកភាព</p>
-                    <p className="font-moul text-[8.5px] pt-1 leading-normal text-slate-800">នាយកសាលា</p>
+                    <p className="font-moul text-[8.5px] pt-1 leading-normal text-slate-800">នាយក/នាយិកា</p>
                     <div className="h-16"></div>
                     <p className="text-[10px] text-slate-400 font-medium leading-none">................................................</p>
                   </div>
@@ -1456,7 +1463,7 @@ export default function ReportCard({
 
                     <div className="pt-10 flex flex-col items-center text-center">
                       <p className="text-[9px] font-semibold text-slate-500 leading-none">បានឃើញ និងឯកភាព</p>
-                      <p className="font-moul text-[8.5px] pt-1 leading-normal text-slate-800">នាយកសាលា</p>
+                      <p className="font-moul text-[8.5px] pt-1 leading-normal text-slate-800">នាយក/នាយិកា</p>
                       <div className="h-16"></div>
                       <p className="text-[10px] text-slate-400 font-medium leading-none">................................................</p>
                     </div>

@@ -79,11 +79,11 @@ export default function MonthlyRanking({
   const results = computeMonthlyResults(students, subjects, monthScores);
 
   // States for custom metadata editing according to MoEYS standards
-  const [ministryName, setMinistryName] = useState('ក្រសួងអប់រំ យុវជន និងកីឡា');
-  const [provinceName, setProvinceName] = useState('មន្ទីរអប់រំ យុវជន និងកីឡាខេត្តបាត់ដំបង');
-  const [districtCommune, setDistrictCommune] = useState('ការិយាល័យអប់រំ យុវជន និងកីឡាស្រុកសង្កែ');
-  const [schoolName, setSchoolName] = useState('សាលាបឋមសិក្សាវត្តចចង');
-  const [madeInLoc, setMadeInLoc] = useState('វត្តចចង');
+  const [ministryName, setMinistryName] = useState(() => localStorage.getItem('label_ministry') || 'ក្រសួងអប់រំ យុវជន និងកីឡា');
+  const [provinceName, setProvinceName] = useState(() => localStorage.getItem('label_provincial') || 'មន្ទីរអប់រំ យុវជន និងកីឡាខេត្តបាត់ដំបង');
+  const [districtCommune, setDistrictCommune] = useState(() => localStorage.getItem('label_district') || 'ការិយាល័យអប់រំ យុវជន និងកីឡាស្រុកសង្កែ');
+  const [schoolName, setSchoolName] = useState(() => localStorage.getItem('label_school') || 'សាលាបឋមសិក្សាវត្តចចង');
+  const [madeInLoc, setMadeInLoc] = useState(() => localStorage.getItem('label_madein') || 'វត្តចចង');
   const [layoutMode, setLayoutMode] = useState<'double' | 'single'>('double');
 
   // Compute Class Stats
@@ -330,11 +330,22 @@ export default function MonthlyRanking({
       </style>
     </head>
     <body>
-      <div style="text-align: center;">
-        <p style="margin: 0; font-weight: bold; font-size: 12pt;">ព្រះរាជាណាចក្រកម្ពុជា</p>
-        <p style="margin: 3px 0 0 0; font-weight: bold; font-size: 9pt;">ជាតិ សាសនា ព្រះមហាក្សត្រ</p>
-        <p style="margin: 0; font-size: 10pt;">******</p>
-      </div>
+      <table style="width: 100%; border: none; margin-bottom: 20px;">
+        <tr>
+          <td style="width: 38%; border: none; text-align: left; vertical-align: top; padding: 0;">
+            <span style="font-family: sans-serif; font-size: 10pt; font-weight: bold; color: #1e293b;">${ministryName}</span><br>
+            <span style="font-family: sans-serif; font-size: 8.5pt; font-weight: bold; color: #334155;">${provinceName}</span><br>
+            <span style="font-size: 9pt; font-weight: bold; color: #475569;">${districtCommune}</span><br>
+            <span style="font-size: 9pt; font-weight: bold; color: #1e293b;">សាលា៖ <u>${schoolName}</u></span>
+          </td>
+          <td style="width: 34%; border: none; text-align: center; vertical-align: top; padding: 0;">
+            <span style="font-family: sans-serif; font-size: 11pt; font-weight: bold; color: #0f172a;">ព្រះរាជាណាចក្រកម្ពុជា</span><br>
+            <span style="font-family: sans-serif; font-size: 9.5pt; font-weight: bold; color: #1e293b; letter-spacing: 1px;">ជាតិ សាសនា ព្រះមហាក្សត្រ</span><br>
+            <div style="font-size: 8pt; color: #b45309; text-align: center; margin-top: 3px;">~ ~ ~ * ~ ~ ~</div>
+          </td>
+          <td style="width: 28%; border: none; text-align: right; vertical-align: top; padding: 0;"></td>
+        </tr>
+      </table>
       
       <h1>${title}</h1>
       
@@ -388,7 +399,7 @@ export default function MonthlyRanking({
         <tr>
           <td style="width: 50%;">
             <p style="margin: 0;">បានឃើញ និងឯកភាព</p>
-            <p style="margin: 5px 0 0 0; font-weight: bold; font-size: 10pt;">នាយកសាលា</p>
+            <p style="margin: 5px 0 0 0; font-weight: bold; font-size: 10pt;">នាយក/នាយិកា</p>
             <br/><br/><br/>
           </td>
           <td style="width: 50%;">
@@ -508,7 +519,10 @@ export default function MonthlyRanking({
           <input
             type="text"
             value={ministryName}
-            onChange={(e) => setMinistryName(e.target.value)}
+            onChange={(e) => {
+              setMinistryName(e.target.value);
+              localStorage.setItem('label_ministry', e.target.value);
+            }}
             className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
@@ -520,7 +534,10 @@ export default function MonthlyRanking({
           <input
             type="text"
             value={provinceName}
-            onChange={(e) => setProvinceName(e.target.value)}
+            onChange={(e) => {
+              setProvinceName(e.target.value);
+              localStorage.setItem('label_provincial', e.target.value);
+            }}
             className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
@@ -532,7 +549,10 @@ export default function MonthlyRanking({
           <input
             type="text"
             value={districtCommune}
-            onChange={(e) => setDistrictCommune(e.target.value)}
+            onChange={(e) => {
+              setDistrictCommune(e.target.value);
+              localStorage.setItem('label_district', e.target.value);
+            }}
             className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
@@ -544,7 +564,10 @@ export default function MonthlyRanking({
           <input
             type="text"
             value={schoolName}
-            onChange={(e) => setSchoolName(e.target.value)}
+            onChange={(e) => {
+              setSchoolName(e.target.value);
+              localStorage.setItem('label_school', e.target.value);
+            }}
             className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
@@ -556,7 +579,10 @@ export default function MonthlyRanking({
           <input
             type="text"
             value={madeInLoc}
-            onChange={(e) => setMadeInLoc(e.target.value)}
+            onChange={(e) => {
+              setMadeInLoc(e.target.value);
+              localStorage.setItem('label_madein', e.target.value);
+            }}
             className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
@@ -976,7 +1002,7 @@ export default function MonthlyRanking({
         <div className="mt-10 grid grid-cols-2 text-center text-[11px] text-slate-700 pt-4 relative">
           <div>
             <p>បានឃើញ និងឯកភាព</p>
-            <p className="font-moul text-[9px] pt-1 leading-normal">នាយកសាលា</p>
+            <p className="font-moul text-[9px] pt-1 leading-normal">នាយក/នាយិកា</p>
             <div className="h-16"></div>
             <p>................................................</p>
           </div>
