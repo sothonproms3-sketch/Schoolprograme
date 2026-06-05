@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { Student, Gender } from '../types';
-import { UserPlus, Search, Edit2, Trash2, ShieldCheck, UserCheck, Calendar, Phone, MapPin, Notebook, Plus, X, FileSpreadsheet } from 'lucide-react';
+import { UserPlus, Search, Edit2, Trash2, ShieldCheck, UserCheck, Calendar, Phone, MapPin, Notebook, Plus, X, FileSpreadsheet, Printer, Camera } from 'lucide-react';
 
 interface StudentProfileBookProps {
   students: Student[];
   onAddStudent: (student: Omit<Student, 'id' | 'avatar'>) => void;
   onUpdateStudent: (student: Student) => void;
   onDeleteStudent: (id: string) => void;
+  className?: string;
+  teacherName?: string;
+  academicYear?: string;
 }
 
 const CONDUCT_OPTIONS = ['ល្អណាស់', 'ល្អ', 'មធ្យម', 'ខ្សោយ'];
@@ -26,9 +29,20 @@ export default function StudentProfileBook({
   onAddStudent,
   onUpdateStudent,
   onDeleteStudent,
+  className = '',
+  teacherName = '',
+  academicYear = '',
 }: StudentProfileBookProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+
+  const toKhmerDigits = (val: number | string) => {
+    const khmerDigits = ['០', '១', '២', '៣', '៤', '៥', '៦', '៧', '៨', '៩'];
+    return String(val).split('').map(char => {
+      const idx = parseInt(char);
+      return isNaN(idx) ? char : khmerDigits[idx];
+    }).join('');
+  };
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -44,6 +58,12 @@ export default function StudentProfileBook({
   const [address, setAddress] = useState('');
   const [conduct, setConduct] = useState('ល្អណាស់');
   const [remarks, setRemarks] = useState('');
+
+  // Customizable Administrative Header Tags for MoEYS standard print registry
+  const [ministryLabel, setMinistryLabel] = useState('ក្រសួងអប់រំ យុវជន និងកីឡា');
+  const [provincialLabel, setProvincialLabel] = useState('មន្ទីរអប់រំ យុវជន និងកីឡាខេត្តបាត់ដំបង');
+  const [districtLabel, setDistrictLabel] = useState('ការិយាល័យអប់រំ យុវជន និងកីឡាស្រុកសង្កែ');
+  const [schoolLabel, setSchoolLabel] = useState('សាលាបឋមសិក្សាវត្តចចង');
 
   const openAddForm = () => {
     setIsEditing(false);
@@ -170,6 +190,10 @@ export default function StudentProfileBook({
     document.body.removeChild(link);
   };
 
+  const printStudentRegistry = () => {
+    window.print();
+  };
+
   return (
     <div className="space-y-6">
       {/* Search and Add section */}
@@ -186,6 +210,16 @@ export default function StudentProfileBook({
         </div>
         
         <div className="flex items-center gap-2">
+          {/* Print Registry button */}
+          <button
+            onClick={printStudentRegistry}
+            className="flex items-center justify-center gap-2 bg-blue-700 hover:bg-blue-800 text-white font-medium px-4 py-2.5 rounded-lg transition-all cursor-pointer text-sm h-[38px] shadow-xs"
+            title="បោះពុម្ពសៀវភៅសិក្ខាគារិក (បញ្ជីឈ្មោះ និងប្រវត្តិរូបសង្ខេបសិស្សសរុប)"
+          >
+            <Printer className="h-4 w-4" />
+            <span>បោះពុម្ពបញ្ជីសិស្ស</span>
+          </button>
+
           {/* Export button */}
           <button
             onClick={exportStudentsList}
@@ -204,6 +238,46 @@ export default function StudentProfileBook({
             <UserPlus className="h-4 w-4" />
             <span>ចុះឈ្មោះសិស្សថ្មី</span>
           </button>
+        </div>
+      </div>
+
+      {/* Customizable school metadata header inputs (no-print) */}
+      <div className="bg-white p-4 rounded-xl shadow-xs border border-slate-200 no-print grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 border-slate-150 mb-6">
+        <div className="space-y-1">
+          <label className="text-[10px] uppercase font-bold text-slate-400 block">ក្រសួងសាមី</label>
+          <input
+            type="text"
+            value={ministryLabel}
+            onChange={(e) => setMinistryLabel(e.target.value)}
+            className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[10px] uppercase font-bold text-slate-400 block">មន្ទីរអប់រំខេត្ត/រាជធានី</label>
+          <input
+            type="text"
+            value={provincialLabel}
+            onChange={(e) => setProvincialLabel(e.target.value)}
+            className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[10px] uppercase font-bold text-slate-400 block">ការិយាល័យអប់រំស្រុក/ខណ្ឌ</label>
+          <input
+            type="text"
+            value={districtLabel}
+            onChange={(e) => setDistrictLabel(e.target.value)}
+            className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[10px] uppercase font-bold text-slate-400 block">ឈ្មោះសាលារៀន</label>
+          <input
+            type="text"
+            value={schoolLabel}
+            onChange={(e) => setSchoolLabel(e.target.value)}
+            className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg text-slate-800 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
         </div>
       </div>
 
@@ -243,11 +317,20 @@ export default function StudentProfileBook({
                   >
                     <div className="flex items-start gap-3">
                       {/* Avatar representation derived cleanly */}
-                      <div
-                        className={`h-11 w-11 rounded-full font-bold flex items-center justify-center text-sm uppercase shrink-0 border ${colorClass}`}
-                      >
-                        {student.nameEn ? student.nameEn.substring(0, 2) : 'ST'}
-                      </div>
+                      {student.avatar && (student.avatar.startsWith('data:') || student.avatar.startsWith('http')) ? (
+                        <img
+                          src={student.avatar}
+                          alt="Student Profile"
+                          className="h-11 w-11 rounded-full object-cover border border-slate-200 shrink-0"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div
+                          className={`h-11 w-11 rounded-full font-bold flex items-center justify-center text-sm uppercase shrink-0 border ${colorClass}`}
+                        >
+                          {student.nameEn ? student.nameEn.substring(0, 2) : 'ST'}
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 justify-between">
                           <h4 className="font-semibold text-slate-800 truncate text-base">
@@ -317,8 +400,48 @@ export default function StudentProfileBook({
             {selectedStudent ? (
               <div className="space-y-4">
                 <div className="text-center pb-4 border-b border-slate-100">
-                  <div className="h-20 w-20 rounded-full font-bold flex items-center justify-center text-2xl uppercase border border-blue-200 bg-blue-50 text-blue-700 mx-auto mb-2">
-                    {selectedStudent.nameEn ? selectedStudent.nameEn.substring(0, 2) : 'ST'}
+                  <div className="relative group mx-auto mb-2 w-20 h-20">
+                    {selectedStudent.avatar && (selectedStudent.avatar.startsWith('data:') || selectedStudent.avatar.startsWith('http')) ? (
+                      <img
+                        src={selectedStudent.avatar}
+                        alt="Student Profile"
+                        className="h-20 w-20 rounded-full object-cover border border-slate-200 shadow-inner"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="h-20 w-20 rounded-full font-bold flex items-center justify-center text-2xl uppercase border border-blue-200 bg-blue-50 text-blue-700 shadow-inner">
+                        {selectedStudent.nameEn ? selectedStudent.nameEn.substring(0, 2) : 'ST'}
+                      </div>
+                    )}
+                    
+                    {/* Hover upload trigger */}
+                    <label className="absolute inset-0 bg-black/50 text-white rounded-full flex flex-col items-center justify-center text-[9px] font-bold opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-center p-1 no-print">
+                      <Camera className="h-3.5 w-3.5 mb-1 text-white" />
+                      <span>ផ្ទុកឡើងរូបថត</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          
+                          if (file.size > 2 * 1024 * 1024) {
+                            alert("ទំហំរូបភាពធំពេក! សូមជ្រើសរើសរូបភាពក្រោម ២MB។");
+                            return;
+                          }
+                          
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            onUpdateStudent({
+                              ...selectedStudent,
+                              avatar: reader.result as string
+                            });
+                          };
+                          reader.readAsDataURL(file);
+                        }}
+                        className="hidden"
+                      />
+                    </label>
                   </div>
                   <h3 className="text-lg font-bold text-slate-800">{selectedStudent.nameKh}</h3>
                   <p className="text-xs text-slate-500 font-mono uppercase mt-0.5">{selectedStudent.nameEn}</p>
@@ -589,6 +712,111 @@ export default function StudentProfileBook({
           </div>
         </div>
       )}
+
+      {/* Printable Registry Book - HIDDEN ON SCREEN, SHOWN ON PRINT */}
+      <div className="hidden print:block print-area">
+        {/* Official Header */}
+        <div className="grid grid-cols-2 items-start pb-5 border-b border-double border-slate-350 mb-6">
+          <div className="text-left space-y-1">
+            <h3 className="font-moul text-[10px] text-slate-800 leading-normal">{ministryLabel}</h3>
+            <h4 className="font-moul text-[8.5px] text-slate-700 leading-normal pl-1.5">{provincialLabel}</h4>
+            <p className="text-[9.5px] font-semibold text-slate-700 pl-3 leading-normal">
+              {districtLabel}
+            </p>
+            <p className="text-[10.5px] font-bold text-slate-900 pl-4 leading-normal mt-1">
+              សាលា៖ <span className="underline decoration-dotted stroke-slate-400 underline-offset-4 font-bold text-[11px]">{schoolLabel}</span>
+            </p>
+          </div>
+          
+          <div className="text-right space-y-1">
+            <h2 className="font-moul text-[12px] text-slate-900 leading-normal tracking-wide">ព្រះរាជាណាចក្រកម្ពុជា</h2>
+            <h3 className="font-moul text-[10px] text-slate-850 leading-normal tracking-wider">ជាតិ សាសនា ព្រះមហាក្សត្រ</h3>
+            <div className="flex justify-end pr-8">
+              <svg width="45" height="10" viewBox="0 0 45 10" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-amber-600 block">
+                <path d="M2.5 5C5.5 1.5 8.5 1.5 11.5 5C14.5 8.5 17.5 8.5 20.5 5C23.5 1.5 26.5 1.5 29.5 5C32.5 8.5 35.5 8.5 38.5 5C41.5 1.5 43.5 3 44.5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        {/* Title */}
+        <div className="text-center pb-6">
+          <h1 className="font-moul text-lg text-brand-blue tracking-wide uppercase">សៀវភៅសិក្ខាគារិក (បញ្ជីប្រវត្តិរូបសង្ខេបសិស្ស)</h1>
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 text-xs text-slate-500 font-medium pt-2">
+            <span>ថ្នាក់៖ <strong className="text-slate-800 font-bold">{className || '...'}</strong></span>
+            <span>ឆ្នាំសិក្សា៖ <strong className="text-slate-800 font-bold">{academicYear || '...'}</strong></span>
+            <span>គ្រូបង្រៀន៖ <strong className="text-slate-800 font-bold">{teacherName || '...'}</strong></span>
+            <span>សិស្សសរុប៖ <strong className="text-slate-800 font-bold">{students.length} នាក់</strong></span>
+          </div>
+        </div>
+
+        {/* Table of profiles */}
+        <table className="w-full text-left border-collapse border border-slate-400 text-xs text-slate-800">
+          <thead>
+            <tr className="bg-slate-50 text-slate-800 text-center font-bold border-b border-slate-400">
+              <th className="py-2 px-1 border-r border-slate-400 w-[45px]">ល.រ</th>
+              <th className="py-2 px-2 border-r border-slate-400 text-left min-w-[120px]">ឈ្មោះភាសាខ្មែរ</th>
+              <th className="py-2 px-2 border-r border-slate-400 text-left min-w-[100px] font-mono">Latin Name</th>
+              <th className="py-2 px-1 border-r border-slate-400 w-[45px]">ភេទ</th>
+              <th className="py-2 px-2 border-r border-slate-400 min-w-[90px]">ថ្ងៃខែឆ្នាំកំណើត</th>
+              <th className="py-2 px-2 border-r border-slate-400 min-w-[130px] text-left">ទីកន្លែងកំណើត</th>
+              <th className="py-2 px-2 border-r border-slate-400 text-left">អាណាព្យាបាល (ឪពុក-ម្តាយ)</th>
+              <th className="py-2 px-2 border-r border-slate-400 text-left min-w-[85px]">លេខទូរស័ព្ទ</th>
+              <th className="py-2 px-1 border-r border-slate-400 w-[60px]">សីលធម៌</th>
+            </tr>
+          </thead>
+          <tbody>
+            {students.length === 0 ? (
+              <tr>
+                <td colSpan={9} className="py-8 text-center text-slate-400">
+                  មិនទាន់មានទិន្នន័យសិស្សឡើយ។
+                </td>
+              </tr>
+            ) : (
+              students.map((student, idx) => (
+                <tr key={student.id} className="text-center border-b border-slate-300">
+                  <td className="py-2 px-1 border-r border-slate-300 font-mono font-bold">{idx + 1}</td>
+                  <td className="py-2 px-2 border-r border-slate-300 text-left font-semibold text-slate-900">{student.nameKh}</td>
+                  <td className="py-2 px-2 border-r border-slate-300 text-left font-mono uppercase text-[11px] text-slate-600">{student.nameEn}</td>
+                  <td className="py-2 px-1 border-r border-slate-300">{student.gender}</td>
+                  <td className="py-2 px-2 border-r border-slate-300 font-mono">{student.dob || '-'}</td>
+                  <td className="py-2 px-2 border-r border-slate-300 text-left text-[11px] leading-snug">{student.birthPlace || '-'}</td>
+                  <td className="py-2 px-2 border-r border-slate-300 text-left text-[11px] leading-snug">
+                    {student.fatherName && <span>ឪពុក៖ {student.fatherName}</span>}
+                    {student.fatherName && student.motherName && <br />}
+                    {student.motherName && <span>ម្តាយ៖ {student.motherName}</span>}
+                  </td>
+                  <td className="py-2 px-2 border-r border-slate-300 font-mono text-left">{student.phone || '-'}</td>
+                  <td className="py-2 px-1 border-r border-slate-300 font-semibold">{student.conduct}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+
+        {/* Signature at bottom */}
+        <div className="mt-12 grid grid-cols-2 text-center text-xs text-slate-700 pt-6">
+          <div>
+            <p className="font-semibold text-slate-500">បានឃើញ និងឯកភាព</p>
+            <p className="font-moul text-[9.5px] pt-1 leading-relaxed">នាយកសាលាបឋមសិក្សា</p>
+            <div className="h-16 flex items-center justify-center relative select-none">
+              {/* Decorative stamp element behind */}
+              <div className="absolute border border-dotted border-rose-500/10 rounded-full h-11 w-11 flex items-center justify-center rotate-12 -z-10 no-print">
+                <span className="text-[7px] text-rose-500/15 font-bold uppercase truncate">GRADED</span>
+              </div>
+            </div>
+            <p className="text-slate-400">................................................</p>
+          </div>
+          <div>
+            <p className="italic font-bold text-[10.5px] text-amber-900">
+              ថ្ងៃសុក្រ ៧កើត ខែមិគសិរ ឆ្នាំជូត ឯកស័ក {academicYear ? toKhmerDigits(academicYear) : '២០២៦'}
+            </p>
+            <p className="font-moul text-[9.5px] pt-1 leading-relaxed">គ្រូបន្ទុកថ្នាក់</p>
+            <div className="h-16 flex items-center justify-center"></div>
+            <p className="font-bold text-slate-900 text-sm">{teacherName || '................................'}</p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -11,6 +11,7 @@ interface ScoreEntrySheetProps {
   onRemoveSubject: (subjectId: string) => void;
   onAutofillScores: () => void;
   onClearScores: () => void;
+  isAdmin?: boolean;
 }
 
 export default function ScoreEntrySheet({
@@ -22,6 +23,7 @@ export default function ScoreEntrySheet({
   onRemoveSubject,
   onAutofillScores,
   onClearScores,
+  isAdmin = true,
 }: ScoreEntrySheetProps) {
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [formScores, setFormScores] = useState<Record<string, string>>({});
@@ -98,29 +100,31 @@ export default function ScoreEntrySheet({
             សូមកំណត់ពិន្ទុរបស់សិស្សម្នាក់ៗ។ ពិន្ទុរៀបចំទម្រង់ស្រង់ប្រចាំខែដោយស្វ័យប្រវត្ត។
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setIsSubjectManagerOpen(true)}
-            className="flex items-center gap-1.5 py-2 px-3 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer transition-colors"
-          >
-            <Settings className="h-4 w-4 text-slate-500" />
-            <span>គ្រប់គ្រងមុខវិជ្ជា ({subjects.length})</span>
-          </button>
-          <button
-            onClick={onAutofillScores}
-            className="flex items-center gap-1.5 py-2 px-3 bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 rounded-lg text-xs font-bold cursor-pointer transition-colors"
-          >
-            <Sparkles className="h-4 w-4 text-amber-700" />
-            <span>បន្ថែមពិន្ទុគំរូស្វ័យប្រវត្តិ (Demo)</span>
-          </button>
-          <button
-            onClick={onClearScores}
-            className="flex items-center gap-1.5 py-2 px-3 bg-rose-50 border border-rose-100 text-rose-800 hover:bg-rose-100 rounded-lg text-xs font-medium cursor-pointer transition-colors"
-          >
-            <Trash2 className="h-4 w-4 text-rose-700" />
-            <span>សម្អាតពិន្ទុទាំងអស់</span>
-          </button>
-        </div>
+        {isAdmin && (
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setIsSubjectManagerOpen(true)}
+              className="flex items-center gap-1.5 py-2 px-3 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+            >
+              <Settings className="h-4 w-4 text-slate-500" />
+              <span>គ្រប់គ្រងមុខវិជ្ជា ({subjects.length})</span>
+            </button>
+            <button
+              onClick={onAutofillScores}
+              className="flex items-center gap-1.5 py-2 px-3 bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 rounded-lg text-xs font-bold cursor-pointer transition-colors"
+            >
+              <Sparkles className="h-4 w-4 text-amber-700" />
+              <span>បន្ថែមពិន្ទុគំរូស្វ័យប្រវត្តិ (Demo)</span>
+            </button>
+            <button
+              onClick={onClearScores}
+              className="flex items-center gap-1.5 py-2 px-3 bg-rose-50 border border-rose-100 text-rose-800 hover:bg-rose-100 rounded-lg text-xs font-medium cursor-pointer transition-colors"
+            >
+              <Trash2 className="h-4 w-4 text-rose-700" />
+              <span>សម្អាតពិន្ទុទាំងអស់</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Main Grid Spreadsheet representation */}
