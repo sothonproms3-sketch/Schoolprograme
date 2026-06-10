@@ -1151,6 +1151,7 @@ export default function App() {
                 teacherName={config.teacherName}
                 academicYear={config.academicYear}
                 selectedMonth={config.selectedMonth}
+                onAddStudent={handleAddStudent}
               />
             )}
             {activeTab === 'ranking' && (

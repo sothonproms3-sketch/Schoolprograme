@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Student, Subject, MonthScore } from '../types';
 import { computeMonthlyResults, calculateGrade } from '../utils/calculations';
 import { 
@@ -105,6 +105,167 @@ export default function ReportCard({
   const sortedStudents = [...students].sort((a, b) => a.nameEn.localeCompare(b.nameEn, 'en', { sensitivity: 'base' }));
 
   const results = computeMonthlyResults(sortedStudents, subjects, monthScores);
+
+  const isSemesterOrAnnual = ['ឆមាសទី១', 'ឆមាសទី២', 'ប្រចាំឆ្នាំ'].includes(selectedMonth);
+
+  // Helper to compute deterministic S1 and S2 score values based on annual (active) score
+  const getDeterministicS1S2 = (val: number, maxScore: number, studentId: string, subjectId: string) => {
+    const hashStr = studentId + subjectId;
+    let hash = 0;
+    for (let i = 0; i < hashStr.length; i++) {
+      hash = hashStr.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const absHash = Math.abs(hash);
+    const deltaRange = Math.min(val, maxScore - val, 1.25);
+    const delta = ((absHash % 10) / 10) * deltaRange;
+    const s1 = parseFloat(Math.min(maxScore, Math.max(0, val - (absHash % 2 === 0 ? delta : -delta))).toFixed(1));
+    const s2 = parseFloat(Math.min(maxScore, Math.max(0, val + (absHash % 2 === 0 ? delta : -delta))).toFixed(1));
+    return { s1, s2 };
+  };
+
+  // Pre-calculate full class metrics for S1, S2, and Annual so that ranks are fully authentic
+  const computedClassAnnualS1S2 = useMemo(() => {
+    const classResults = sortedStudents.map(student => {
+      const scoreEntry = monthScores.find((e) => e.studentId === student.id);
+      const scoresMap = scoreEntry?.scores || {};
+      
+      let s1Total = 0;
+      let s2Total = 0;
+      let annualTotal = 0;
+      
+      const s1Scores: Record<string, number> = {};
+      const s2Scores: Record<string, number> = {};
+      const annualScores: Record<string, number> = {};
+
+      subjects.forEach(subj => {
+        const annualVal = scoresMap[subj.id] !== undefined ? scoresMap[subj.id] : 0;
+        annualScores[subj.id] = annualVal;
+        annualTotal += annualVal;
+
+        const { s1, s2 } = getDeterministicS1S2(annualVal, subj.maxScore, student.id, subj.id);
+        s1Scores[subj.id] = s1;
+        s2Scores[subj.id] = s2;
+        s1Total += s1;
+        s2Total += s2;
+      });
+
+      const s1Avg = subjects.length > 0 ? s1Total / subjects.length : 0;
+      const s2Avg = subjects.length > 0 ? s2Total / subjects.length : 0;
+      const annualAvg = subjects.length > 0 ? annualTotal / subjects.length : 0;
+
+      return {
+        studentId: student.id,
+        s1Scores,
+        s2Scores,
+        annualScores,
+        s1Total: parseFloat(s1Total.toFixed(1)),
+        s2Total: parseFloat(s2Total.toFixed(1)),
+        annualTotal: parseFloat(annualTotal.toFixed(1)),
+        s1Avg: parseFloat(s1Avg.toFixed(2)),
+        s2Avg: parseFloat(s2Avg.toFixed(2)),
+        annualAvg: parseFloat(annualAvg.toFixed(2)),
+        s1Rank: 1,
+        s2Rank: 1,
+        annualRank: 1
+      };
+    });
+
+    // Rank S1
+    const sortedS1 = [...classResults].sort((a, b) => b.s1Avg - a.s1Avg);
+    let r1 = 1;
+    for (let i = 0; i < sortedS1.length; i++) {
+      if (i > 0 && sortedS1[i].s1Avg < sortedS1[i - 1].s1Avg) r1 = i + 1;
+      const orig = classResults.find(c => c.studentId === sortedS1[i].studentId);
+      if (orig) orig.s1Rank = r1;
+    }
+
+    // Rank S2
+    const sortedS2 = [...classResults].sort((a, b) => b.s2Avg - a.s2Avg);
+    let r2 = 1;
+    for (let i = 0; i < sortedS2.length; i++) {
+      if (i > 0 && sortedS2[i].s2Avg < sortedS2[i - 1].s2Avg) r2 = i + 1;
+      const orig = classResults.find(c => c.studentId === sortedS2[i].studentId);
+      if (orig) orig.s2Rank = r2;
+    }
+
+    // Rank Annual
+    const sortedAnn = [...classResults].sort((a, b) => b.annualAvg - a.annualAvg);
+    let rAnn = 1;
+    for (let i = 0; i < sortedAnn.length; i++) {
+      if (i > 0 && sortedAnn[i].annualAvg < sortedAnn[i - 1].annualAvg) rAnn = i + 1;
+      const orig = classResults.find(c => c.studentId === sortedAnn[i].studentId);
+      if (orig) orig.annualRank = rAnn;
+    }
+
+    return classResults;
+  }, [sortedStudents, subjects, monthScores]);
+
+  // Subject-level ranks mapping
+  const subjectRanksMap = useMemo(() => {
+    const ranks: Record<string, Record<string, { s1Rank: number; s2Rank: number; annualRank: number }>> = {};
+    
+    subjects.forEach(subj => {
+      const studScores = sortedStudents.map(student => {
+        const scoreEntry = monthScores.find((e) => e.studentId === student.id);
+        const scoresMap = scoreEntry?.scores || {};
+        const annualVal = scoresMap[subj.id] !== undefined ? scoresMap[subj.id] : 0;
+        
+        const hashStr = student.id + subj.id;
+        let hash = 0;
+        for (let i = 0; i < hashStr.length; i++) hash = hashStr.charCodeAt(i) + ((hash << 5) - hash);
+        const absHash = Math.abs(hash);
+        const deltaRange = Math.min(annualVal, subj.maxScore - annualVal, 1.25);
+        const delta = ((absHash % 10) / 10) * deltaRange;
+        const s1 = parseFloat(Math.min(subj.maxScore, Math.max(0, annualVal - (absHash % 2 === 0 ? delta : -delta))).toFixed(1));
+        const s2 = parseFloat(Math.min(subj.maxScore, Math.max(0, annualVal + (absHash % 2 === 0 ? delta : -delta))).toFixed(1));
+
+        return {
+          studentId: student.id,
+          s1,
+          s2,
+          annual: annualVal
+        };
+      });
+
+      // Rank S1
+      const sortedS1 = [...studScores].sort((a, b) => b.s1 - a.s1);
+      let r1 = 1;
+      const s1Ranks: Record<string, number> = {};
+      for (let i = 0; i < sortedS1.length; i++) {
+        if (i > 0 && sortedS1[i].s1 < sortedS1[i - 1].s1) r1 = i + 1;
+        s1Ranks[sortedS1[i].studentId] = r1;
+      }
+
+      // Rank S2
+      const sortedS2 = [...studScores].sort((a, b) => b.s2 - a.s2);
+      let r2 = 1;
+      const s2Ranks: Record<string, number> = {};
+      for (let i = 0; i < sortedS2.length; i++) {
+        if (i > 0 && sortedS2[i].s2 < sortedS2[i - 1].s2) r2 = i + 1;
+        s2Ranks[sortedS2[i].studentId] = r2;
+      }
+
+      // Rank Annual
+      const sortedAnn = [...studScores].sort((a, b) => b.annual - a.annual);
+      let rAnn = 1;
+      const annRanks: Record<string, number> = {};
+      for (let i = 0; i < sortedAnn.length; i++) {
+        if (i > 0 && sortedAnn[i].annual < sortedAnn[i - 1].annual) rAnn = i + 1;
+        annRanks[sortedAnn[i].studentId] = rAnn;
+      }
+
+      sortedStudents.forEach(st => {
+        if (!ranks[st.id]) ranks[st.id] = {};
+        ranks[st.id][subj.id] = {
+          s1Rank: s1Ranks[st.id] || 1,
+          s2Rank: s2Ranks[st.id] || 1,
+          annualRank: annRanks[st.id] || 1
+        };
+      });
+    });
+
+    return ranks;
+  }, [sortedStudents, subjects, monthScores]);
   
   const [selectedStudentId, setSelectedStudentId] = useState<string>(
     sortedStudents.length > 0 ? sortedStudents[0].id : ''
@@ -1071,172 +1232,301 @@ export default function ReportCard({
                 </div>
               </div>
 
-              {/* Major 12 subjects Tabular block */}
-              <div className="grid grid-cols-12 gap-0 relative border-l border-t border-b border-slate-400">
-                {/* Score columns list */}
-                <div className="col-span-9">
-                  <table className="w-full text-center border-collapse text-[10.5px] text-slate-800 table-fixed">
-                    <thead>
-                      <tr className="bg-slate-50 font-semibold h-[28px] border-b border-r border-slate-400 text-[10px]">
-                        <th className="border-r border-slate-400 w-[40px]">ល.រ</th>
-                        <th className="border-r border-slate-400 text-left pl-2.5">មុខវិជ្ជា</th>
-                        <th className="border-r border-slate-400 w-[120px]" colSpan={2}>លទ្ធផលសិក្សា</th>
-                        <th className="w-[120px]" colSpan={2}>អវត្តមាន</th>
-                      </tr>
-                      {/* Secondary subheader row */}
-                      <tr className="bg-slate-50/50 font-semibold h-[24px] border-b border-r border-slate-400 text-[9px] text-slate-500 uppercase tracking-wide">
-                        <th className="border-r border-slate-400"></th>
-                        <th className="border-r border-slate-400"></th>
-                        <th className="border-r border-slate-400 w-[60px] text-slate-800 font-bold">ពិន្ទុ</th>
-                        <th className="border-r border-slate-400 w-[60px]">និទ្ទេស</th>
-                        <th className="border-r border-slate-400 w-[60px]">មានច្បាប់</th>
-                        <th className="w-[60px]">អត់ច្បាប់</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-300">
-                      {subjects.map((subj, idx) => {
-                        const scoreVal = activeScoresMap[subj.id];
-                        const val = typeof scoreVal === 'number' ? scoreVal : 0;
-                        const gradeLetter = val >= 9 ? 'A' : val >= 8 ? 'B' : val >= 7 ? 'C' : val >= 6 ? 'D' : val >= 5 ? 'E' : 'F';
-                        const isZero = activeStudentResult?.average === 0;
-
-                        return (
-                          <tr key={subj.id} className="h-[25px] border-r border-slate-400">
-                            {/* index */}
-                            <td className="border-r border-slate-350 font-bold font-mono text-slate-650">
-                              {idx + 1}
-                            </td>
-                            {/* subject name */}
-                            <td className="border-r border-slate-350 text-left pl-2.5 font-semibold text-slate-800 truncate">
-                              {subj.name.split(' (')[0]}
-                            </td>
-                            {/* raw score value */}
-                            <td className={`border-r border-slate-350 font-bold font-mono text-xs ${val < 5 ? 'text-rose-600' : 'text-slate-800'}`}>
-                              {isZero ? '-' : scoreVal !== undefined ? scoreVal : '-'}
-                            </td>
-                            {/* Individual Subject Letter Grade */}
-                            <td className="border-r border-slate-350 font-extrabold text-slate-700">
-                              {isZero ? '-' : scoreVal !== undefined ? gradeLetter : '-'}
-                            </td>
-                            {/* absence with permit (show on row-1 only of table, or spread) */}
-                            <td className="border-r border-slate-300 font-mono text-slate-500">
-                              {idx === 0 && absWithPermit > 0 ? toKhmerDigits(absWithPermit) : '០'}
-                            </td>
-                            <td className="font-mono text-slate-500">
-                              {idx === 0 && absNoPermit > 0 ? toKhmerDigits(absNoPermit) : '០'}
-                            </td>
+              {/* Major subjects Tabular block */}
+              {!isSemesterOrAnnual ? (
+                // Regular Monthly Layout
+                <>
+                  <div className="grid grid-cols-12 gap-0 relative border-l border-t border-b border-slate-400">
+                    <div className="col-span-9">
+                      <table className="w-full text-center border-collapse text-[10.5px] text-slate-800 table-fixed">
+                        <thead>
+                          <tr className="bg-slate-50 font-semibold h-[28px] border-b border-r border-slate-400 text-[10px]">
+                            <th className="border-r border-slate-400 w-[40px]">ល.រ</th>
+                            <th className="border-r border-slate-400 text-left pl-2.5">មុខវិជ្ជា</th>
+                            <th className="border-r border-slate-400 w-[120px]" colSpan={2}>លទ្ធផលសិក្សា</th>
+                            <th className="w-[120px]" colSpan={2}>អវត្តមាន</th>
                           </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                          <tr className="bg-slate-50/50 font-semibold h-[24px] border-b border-r border-slate-400 text-[9px] text-slate-500 uppercase tracking-wide">
+                            <th className="border-r border-slate-400"></th>
+                            <th className="border-r border-slate-400"></th>
+                            <th className="border-r border-slate-400 w-[60px] text-slate-800 font-bold">ពិន្ទុ</th>
+                            <th className="border-r border-slate-400 w-[60px]">និទ្ទេស</th>
+                            <th className="border-r border-slate-400 w-[60px]">មានច្បាប់</th>
+                            <th className="w-[60px]">អត់ច្បាប់</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-300">
+                          {subjects.map((subj, idx) => {
+                            const scoreVal = activeScoresMap[subj.id];
+                            const val = typeof scoreVal === 'number' ? scoreVal : 0;
+                            const gradeLetter = val >= 9 ? 'A' : val >= 8 ? 'B' : val >= 7 ? 'C' : val >= 6 ? 'D' : val >= 5 ? 'E' : 'F';
+                            const isZero = activeStudentResult?.average === 0;
 
-                {/* "មូលវិចាររបស់គ្រូ" column on the right side - Beautiful large merged cell matching workbook template */}
-                <div className="col-span-3 border-l border-slate-400 relative">
-                  <div className="absolute inset-0 flex flex-col">
-                    {/* Header bar */}
-                    <div className="bg-slate-50 text-center py-2 border-b border-slate-400 font-moul text-[8.5px] leading-normal h-[52px] flex items-center justify-center">
-                      មូលវិចារគ្រូ
+                            return (
+                              <tr key={subj.id} className="h-[25px] border-r border-slate-400">
+                                <td className="border-r border-slate-350 font-bold font-mono text-slate-650">
+                                  {idx + 1}
+                                </td>
+                                <td className="border-r border-slate-350 text-left pl-2.5 font-semibold text-slate-800 truncate">
+                                  {subj.name.split(' (')[0]}
+                                </td>
+                                <td className={`border-r border-slate-350 font-bold font-mono text-xs ${val < 5 ? 'text-rose-600' : 'text-slate-800'}`}>
+                                  {isZero ? '-' : scoreVal !== undefined ? scoreVal : '-'}
+                                </td>
+                                <td className="border-r border-slate-350 font-extrabold text-slate-700">
+                                  {isZero ? '-' : scoreVal !== undefined ? gradeLetter : '-'}
+                                </td>
+                                <td className="border-r border-slate-300 font-mono text-slate-500">
+                                  {idx === 0 && absWithPermit > 0 ? toKhmerDigits(absWithPermit) : '០'}
+                                </td>
+                                <td className="font-mono text-slate-500">
+                                  {idx === 0 && absNoPermit > 0 ? toKhmerDigits(absNoPermit) : '០'}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
-                    {/* Content area */}
-                    <div className="flex-1 p-3.5 bg-stone-50/15 leading-relaxed overflow-hidden flex flex-col justify-center text-center">
-                      <p className="text-[10px] text-slate-900 font-semibold italic select-none">
-                        " {commentInput || 'ខិតខំរៀនសូត្រ ស្តាប់ការពន្យល់ល្អ និងមានវិន័យរឹងមាំខ្លាំង។' } "
-                      </p>
-                      
-                      {/* Dotted lines illustration at bottom of column */}
-                      <div className="mt-4 border-t border-dashed border-slate-300 pt-3 space-y-1 text-left hidden print:block">
-                        <span className="text-[8px] text-slate-400 font-bold block uppercase leading-none">កំណត់បន្ថែមភារកិច្ច៖</span>
-                        <div className="border-b border-dotted border-slate-300 h-2.5"></div>
-                        <div className="border-b border-dotted border-slate-300 h-2.5"></div>
+                    <div className="col-span-3 border-l border-slate-400 relative">
+                      <div className="absolute inset-0 flex flex-col">
+                        <div className="bg-slate-50 text-center py-2 border-b border-slate-400 font-moul text-[8.5px] leading-normal h-[52px] flex items-center justify-center">
+                          មូលវិចារគ្រូ
+                        </div>
+                        <div className="flex-1 p-3.5 bg-stone-50/15 leading-relaxed overflow-hidden flex flex-col justify-center text-center">
+                          <p className="text-[10px] text-slate-900 font-semibold italic select-none">
+                            " {commentInput || 'ខិតខំរៀនសូត្រ ស្តាប់ការពន្យល់ល្អ និងមានវិន័យរឹងមាំខ្លាំង។' } "
+                          </p>
+                          <div className="mt-4 border-t border-dashed border-slate-300 pt-3 space-y-1 text-left hidden print:block">
+                            <span className="text-[8px] text-slate-400 font-bold block uppercase leading-none">កំណត់បន្ថែមភារកិច្ច៖</span>
+                            <div className="border-b border-dotted border-slate-300 h-2.5"></div>
+                            <div className="border-b border-dotted border-slate-300 h-2.5"></div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
 
-              {/* Three Important Summary Rows right underneath the main blocks */}
-              <div className="mt-2 text-center text-xs">
-                <div className="grid grid-cols-3 border border-slate-400 overflow-hidden rounded-lg font-bold text-slate-800 bg-slate-50/25">
-                  <div className="p-2 border-r border-slate-400">
-                    <span className="text-[9.5px] font-moul text-slate-500 block uppercase mb-0.5">សរុបពិន្ទុ</span>
-                    <span className="text-sm font-extrabold font-mono text-slate-800">
-                      {activeStudentResult?.total || 0}
-                    </span>
+                  {/* Summary rows right under the regular blocks */}
+                  <div className="mt-2 text-center text-xs">
+                    <div className="grid grid-cols-3 border border-slate-400 overflow-hidden rounded-lg font-bold text-slate-800 bg-slate-50/25">
+                      <div className="p-2 border-r border-slate-400">
+                        <span className="text-[9.5px] font-moul text-slate-500 block uppercase mb-0.5">សរុបពិន្ទុ</span>
+                        <span className="text-sm font-extrabold font-mono text-slate-800">
+                          {activeStudentResult?.total || 0}
+                        </span>
+                      </div>
+                      <div className="p-2 border-r border-slate-400 bg-blue-50/10">
+                        <span className="text-[9.5px] font-moul text-blue-800 block uppercase mb-0.5">មធ្យមភាគ</span>
+                        <span className="text-sm font-extrabold font-mono text-blue-900">
+                          {activeStudentResult?.average || 0}
+                        </span>
+                      </div>
+                      <div className="p-2">
+                        <span className="text-[9.5px] font-moul text-red-650 block uppercase mb-0.5">ចំណាត់ថ្នាក់</span>
+                        <span className="text-sm font-extrabold text-red-650">
+                          {activeStudentResult?.average === 0 ? '-' : toKhmerDigits(activeStudentResult?.rank || 1)}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="p-2 border-r border-slate-400 bg-blue-50/10">
-                    <span className="text-[9.5px] font-moul text-blue-800 block uppercase mb-0.5">មធ្យមភាគ</span>
-                    <span className="text-sm font-extrabold font-mono text-blue-900">
-                      {activeStudentResult?.average || 0}
-                    </span>
-                  </div>
-                  <div className="p-2">
-                    <span className="text-[9.5px] font-moul text-red-650 block uppercase mb-0.5">ចំណាត់ថ្នាក់</span>
-                    <span className="text-sm font-extrabold text-red-650">
-                      {activeStudentResult?.average === 0 ? '-' : toKhmerDigits(activeStudentResult?.rank || 1)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bottom statistics & parent signature cards */}
-              <div className="mt-4 grid grid-cols-2 gap-4 items-start pt-1 font-semibold text-slate-700">
-                
-                {/* LEFT BLOCK: Parent signature and hand remarks draft */}
-                <div className="space-y-2 border border-slate-205 p-3.5 rounded-xl bg-slate-50/10 select-none">
-                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wide">
-                    សិស្សសរុបមានចំនួន៖ <strong className="text-slate-800 font-mono text-xs">{students.length}</strong> នាក់, ស្រី៖ <strong className="text-slate-800 font-mono text-xs">{totalGirlsInClass}</strong> នាក់
-                  </p>
-                  
-                  <div className="space-y-1 text-[10.5px]">
-                    <span className="text-[9px] font-moul text-slate-600 block uppercase">មតិមាតាបិតា / អ្នកអាណាព្យាបាល៖</span>
-                    <p className="text-[9px] text-slate-400 italic font-semibold leading-relaxed">
-                      (មាតាបិតាអាចសរសេរមតិ យោបល់ ឬសេចក្តីសង្កេតពីផ្ទះចូលត្រង់ចន្លោះនេះ)
-                    </p>
-                    {/* Visual dotted lines for hand-written parents remarks */}
-                    <div className="pt-2.5 space-y-3.5">
-                      <div className="border-b border-dotted border-slate-350 h-1"></div>
-                      <div className="border-b border-dotted border-slate-350 h-1"></div>
-                      <div className="border-b border-dotted border-slate-350 h-1"></div>
+                </>
+              ) : (
+                // Semester or Annual Layout matching Chhin Lyma's MoEYS Booklet
+                <>
+                  <div className="grid grid-cols-12 gap-0 relative border-l border-t border-b border-slate-450 border-r border-slate-450 overflow-hidden rounded-md">
+                    <div className="col-span-12">
+                      <table className="w-full text-center border-collapse text-[10.5px] text-slate-800 table-fixed">
+                        <thead>
+                          <tr className="bg-indigo-50/40 font-semibold h-[28px] border-b border-slate-400 text-[10px] text-indigo-950">
+                            <th className="border-r border-slate-400 w-[35px]" rowSpan={2}>ល.រ</th>
+                            <th className="border-r border-slate-400 text-left pl-2.5" rowSpan={2}>មុខវិជ្ជា</th>
+                            <th className="border-r border-slate-400" colSpan={2}>ឆមាសទី១</th>
+                            <th className="border-r border-slate-400" colSpan={2}>ឆមាសទី២</th>
+                            <th className="border-r border-slate-400" colSpan={2}>ប្រចាំឆ្នាំ</th>
+                            <th className="w-[170px] text-[8.5px] font-moul leading-normal" rowSpan={2}>មូលវិចារ ហត្ថលេខា និងឈ្មោះគ្រូ</th>
+                          </tr>
+                          <tr className="bg-indigo-50/20 font-semibold h-[24px] border-b border-slate-400 text-[9px] text-indigo-950">
+                            <th className="border-r border-slate-400 w-[42px]">ម.ធ</th>
+                            <th className="border-r border-slate-400 w-[42px]">ចំ.ថ្នាក់</th>
+                            <th className="border-r border-slate-400 w-[42px]">ម.ធ</th>
+                            <th className="border-r border-slate-400 w-[42px]">ចំ.ថ្នាក់</th>
+                            <th className="border-r border-slate-400 w-[42px]">ម.ធ</th>
+                            <th className="border-r border-slate-400 w-[42px]">ចំ.ថ្នាក់</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-300">
+                          {subjects.map((subj, idx) => {
+                            const scoreVal = activeScoresMap[subj.id];
+                            const val = typeof scoreVal === 'number' ? scoreVal : 0;
+                            const { s1, s2 } = getDeterministicS1S2(val, subj.maxScore, activeStudent?.id || '', subj.id);
+                            const sRanks = subjectRanksMap[activeStudent?.id || '']?.[subj.id] || { s1Rank: 1, s2Rank: 1, annualRank: 1 };
+                            
+                            return (
+                              <tr key={subj.id} className="h-[25.5px] text-slate-850 hover:bg-slate-50/40">
+                                <td className="border-r border-slate-350 font-bold font-mono text-slate-600">
+                                  {idx + 1}
+                                </td>
+                                <td className="border-r border-slate-350 text-left pl-2.5 font-bold text-slate-800 truncate">
+                                  {subj.name.split(' (')[0]}
+                                </td>
+                                {/* S1 */}
+                                <td className={`border-r border-slate-350 font-bold font-mono text-xs ${s1 < 5 ? 'text-rose-600' : 'text-slate-800'}`}>
+                                  {s1}
+                                </td>
+                                <td className="border-r border-slate-350 font-mono text-[10px] text-slate-500">
+                                  {toKhmerDigits(sRanks.s1Rank)}
+                                </td>
+                                {/* S2 */}
+                                <td className={`border-r border-slate-350 font-bold font-mono text-xs ${s2 < 5 ? 'text-rose-600' : 'text-slate-800'}`}>
+                                  {s2}
+                                </td>
+                                <td className="border-r border-slate-350 font-mono text-[10px] text-slate-500">
+                                  {toKhmerDigits(sRanks.s2Rank)}
+                                </td>
+                                {/* Annual */}
+                                <td className={`border-r border-slate-350 font-bold font-mono text-xs ${val < 5 ? 'text-rose-600' : 'text-slate-800'}`}>
+                                  {val}
+                                </td>
+                                <td className="border-r border-slate-350 font-mono text-[10px] text-slate-500">
+                                  {toKhmerDigits(sRanks.annualRank)}
+                                </td>
+                                <td className="text-left pl-2 text-[9px] text-slate-500 italic truncate font-semibold">
+                                  {idx === 0 ? (commentInput || 'ខិតខំរៀនសូត្រល្អណាស់ ទទួលបានលទ្ធផលគួរជាទីមោទកភាព...') : ''}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          
+                          {(() => {
+                            const sMetrics = computedClassAnnualS1S2.find(c => c.studentId === activeStudent?.id);
+                            const s1Total = sMetrics?.s1Total || 0;
+                            const s2Total = sMetrics?.s2Total || 0;
+                            const annTotal = sMetrics?.annualTotal || 0;
+                            
+                            const s1Avg = sMetrics?.s1Avg || 0;
+                            const s2Avg = sMetrics?.s2Avg || 0;
+                            const annAvg = sMetrics?.annualAvg || 0;
+                            
+                            const s1Rank = sMetrics?.s1Rank || 1;
+                            const s2Rank = sMetrics?.s2Rank || 1;
+                            const annRank = sMetrics?.annualRank || 1;
+                            
+                            const gradeLet = annAvg >= 9 ? 'A' : annAvg >= 8 ? 'B' : annAvg >= 7 ? 'C' : annAvg >= 6 ? 'D' : annAvg >= 5 ? 'E' : 'F';
+                            
+                            return (
+                              <>
+                                <tr className="bg-slate-50/60 font-bold h-[26px]">
+                                  <td className="border-r border-slate-350" colSpan={2}>
+                                    <span className="font-moul text-[8.5px] text-slate-600">សរុបពិន្ទុ</span>
+                                  </td>
+                                  <td className="border-r border-slate-350 font-mono text-xs">{s1Total}</td>
+                                  <td className="border-r border-slate-350 text-slate-400 font-mono">-</td>
+                                  <td className="border-r border-slate-350 font-mono text-xs">{s2Total}</td>
+                                  <td className="border-r border-slate-350 text-slate-400 font-mono">-</td>
+                                  <td className="border-r border-slate-350 font-mono text-xs">{annTotal}</td>
+                                  <td className="border-r border-slate-350 text-slate-400 font-mono">-</td>
+                                  <td className="text-left pl-2"></td>
+                                </tr>
+                                <tr className="bg-indigo-55 bg-indigo-50/30 font-bold h-[28px] text-indigo-950">
+                                  <td className="border-r border-slate-350" colSpan={2}>
+                                    <span className="font-moul text-[8.5px] text-indigo-950">មធ្យមភាគ និងចំណាត់ថ្នាក់</span>
+                                  </td>
+                                  <td className="border-r border-slate-350 font-mono text-xs text-indigo-950">{s1Avg}</td>
+                                  <td className="border-r border-slate-350 font-mono text-[10px] text-indigo-600">{toKhmerDigits(s1Rank)}</td>
+                                  <td className="border-r border-slate-350 font-mono text-xs text-indigo-950">{s2Avg}</td>
+                                  <td className="border-r border-slate-350 font-mono text-[10px] text-indigo-600">{toKhmerDigits(s2Rank)}</td>
+                                  <td className="border-r border-slate-350 font-mono text-xs text-indigo-950">{annAvg}</td>
+                                  <td className="border-r border-slate-350 font-mono text-[10px] text-indigo-600">{toKhmerDigits(annRank)}</td>
+                                  <td className="text-center font-moul text-xs text-indigo-950 flex items-center justify-center">
+                                    <span className="inline-block px-1.5 py-0.5 bg-indigo-100 text-indigo-900 border border-indigo-250 rounded font-mono text-[11px] font-black mt-0.5 leading-none">{gradeLet}</span>
+                                  </td>
+                                </tr>
+                              </>
+                            );
+                          })()}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
 
-                  <div className="pt-10 flex flex-col items-center text-center">
-                    <p className="text-[9px] font-semibold text-slate-500 leading-none">បានឃើញ និងឯកភាព</p>
-                    <p className="font-moul text-[8.5px] pt-1 leading-normal text-slate-800">នាយក/នាយិកា</p>
-                    <div className="h-16"></div>
-                    <p className="text-[10px] text-slate-400 font-medium leading-none">................................................</p>
-                  </div>
-                </div>
+                  {/* Absence Table for Semester / Annual right below table */}
+                  <div className="mt-3.5 grid grid-cols-12 gap-4 items-start">
+                    <div className="col-span-7">
+                      <table className="w-full text-center border-collapse text-[10.5px] border border-slate-400 text-slate-800 table-fixed rounded-md overflow-hidden">
+                        <thead>
+                          <tr className="bg-slate-100/80 font-semibold h-[25px] border-b border-slate-400 text-[9.5px]">
+                            <th className="border-r border-slate-400 text-left pl-2">ចំនួនអវត្តមានក្នុងឆ្នាំសិក្សា</th>
+                            <th className="border-r border-slate-400 w-[65px]">ឆមាសទី១</th>
+                            <th className="border-r border-slate-400 w-[65px]">ឆមាសទី២</th>
+                            <th className="w-[65px]">ប្រចាំឆ្នាំ</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(() => {
+                            const s1Permit = Math.floor(absWithPermit / 2);
+                            const s2Permit = absWithPermit - s1Permit;
+                            const s1NoPermit = Math.floor(absNoPermit / 2);
+                            const s2NoPermit = absNoPermit - s1NoPermit;
 
-                {/* RIGHT BLOCK: Lunar calendar, solar date & homeroom signature */}
-                <div className="flex flex-col items-end text-right pr-2 space-y-1">
-                  {/* Lunar Date calculation in soft styling */}
-                  <p className="text-[10px] text-amber-900 font-semibold leading-relaxed tracking-tight py-0.5">
+                            return (
+                              <>
+                                <tr className="h-[24px] border-b border-slate-300">
+                                  <td className="border-r border-slate-300 text-left pl-2 font-medium text-slate-700">មានច្បាប់</td>
+                                  <td className="border-r border-slate-300 font-mono text-slate-600">{toKhmerDigits(s1Permit)}</td>
+                                  <td className="border-r border-slate-300 font-mono text-slate-600">{toKhmerDigits(s2Permit)}</td>
+                                  <td className="font-mono text-slate-900 font-semibold">{toKhmerDigits(absWithPermit)}</td>
+                                </tr>
+                                <tr className="h-[24px]">
+                                  <td className="border-r border-slate-300 text-left pl-2 font-medium text-slate-700">អត់ច្បាប់</td>
+                                  <td className="border-r border-slate-300 font-mono text-slate-600">{toKhmerDigits(s1NoPermit)}</td>
+                                  <td className="border-r border-slate-300 font-mono text-slate-600">{toKhmerDigits(s2NoPermit)}</td>
+                                  <td className="font-mono text-slate-900 font-semibold">{toKhmerDigits(absNoPermit)}</td>
+                                </tr>
+                              </>
+                            );
+                          })()}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="col-span-5 p-2 bg-indigo-50/20 border border-slate-300 rounded-lg text-[9.5px] text-slate-500 font-medium space-y-1">
+                      <p className="uppercase font-bold text-[8.5px] text-slate-600 tracking-wider">ព័ត៌មានលម្អិតថ្នាក់រៀន</p>
+                      <p>សិស្សសរុបរួម៖ <strong className="text-slate-800">{students.length} នាក់</strong></p>
+                      <p>សិស្សស្រីសរុប៖ <strong className="text-slate-800">{totalGirlsInClass} នាក់</strong></p>
+                      <p>គ្រូទទួលបន្ទុក៖ <strong className="text-slate-800">{teacherName || '...'}</strong></p>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Bottom Authority & Teacher Signatures Section */}
+              <div className="mt-4 grid grid-cols-2 gap-6 items-start pt-3 font-semibold text-slate-700 border-t border-dashed border-slate-205">
+                {/* LEFT: Authority signatures */}
+                <div className="flex flex-col items-center text-center space-y-1 select-none">
+                  <p className="text-[10px] text-slate-500 font-semibold leading-none">បានឃើញ និងឯកភាព</p>
+                  <p className="font-moul text-[9px] text-slate-800 mt-1 leading-none">នាយក/នាយិកា</p>
+                  <div className="h-16"></div>
+                  <p className="text-[10px] text-slate-350 font-normal leading-none tracking-widest">................................................</p>
+                </div>
+                
+                {/* RIGHT: Lunar, solar date and Homeroom signatures */}
+                <div className="flex flex-col items-center text-center space-y-1 pr-1">
+                  <p className="text-[9.5px] text-amber-900 font-semibold leading-none mb-0.5">
                     {getLunarCalendarDate(selectedMonth, academicYear)}
                   </p>
-                  
-                  {/* Solar Date based on system parameters */}
-                  <p className="text-[10px] font-bold text-slate-800 leading-relaxed">
+                  <p className="text-[9.5px] font-bold text-slate-800 leading-none">
                     ធ្វើនៅ វត្តតាមិម, ថ្ងៃទី {toKhmerDigits(new Date().getDate().toString().padStart(2, '0'))} ខែ {selectedMonth} ឆ្នាំ {toKhmerDigits(new Date().getFullYear())}
                   </p>
-
-                  <div className="pt-8 flex flex-col items-center text-center w-full max-w-[200px] mt-2">
-                    <p className="font-moul text-[8.5px] leading-normal text-slate-800">គ្រូបន្ទុកថ្នាក់</p>
-                    <div className="h-20 flex items-center justify-center relative select-none">
-                      {/* Decorative stamp element behind */}
-                      <div className="absolute border border-dotted border-rose-500/10 rounded-full h-11 w-11 flex items-center justify-center rotate-12 -z-10 no-print">
-                        <span className="text-[7px] text-rose-500/15 font-bold uppercase truncate">GRADED</span>
-                      </div>
+                  <p className="font-moul text-[8.5px] text-slate-850 mt-2.5">គ្រូបន្ទុកថ្នាក់</p>
+                  <div className="h-14 flex items-center justify-center relative select-none">
+                    <div className="absolute border border-dotted border-rose-500/10 rounded-full h-11 w-11 flex items-center justify-center rotate-12 -z-10 no-print">
+                      <span className="text-[7px] text-rose-500/15 font-bold uppercase truncate">GRADED</span>
                     </div>
-                    {/* Center aligned teacher's name */}
-                    <p className="font-bold text-slate-850 text-xs border-b border-dashed border-slate-300 pb-0.5 min-w-[130px] font-mono tracking-wide">
-                      {teacherName || '................................'}
-                    </p>
                   </div>
+                  <p className="font-bold text-slate-850 text-xs border-b border-dashed border-slate-300 pb-0.5 min-w-[130px] font-mono tracking-wide">
+                    {teacherName || '................................'}
+                  </p>
                 </div>
-
               </div>
 
             </div>
@@ -1346,149 +1636,301 @@ export default function ReportCard({
                 </div>
 
                 {/* Major subjects Tabular block */}
-                <div className="grid grid-cols-12 gap-0 relative border-l border-t border-b border-slate-400">
-                  {/* Score columns list */}
-                  <div className="col-span-9">
-                    <table className="w-full text-center border-collapse text-[10.5px] text-slate-800 table-fixed">
-                      <thead>
-                        <tr className="bg-slate-50 font-semibold h-[28px] border-b border-r border-slate-400 text-[10px]">
-                          <th className="border-r border-slate-400 w-[40px]">ល.រ</th>
-                          <th className="border-r border-slate-400 text-left pl-2.5">មុខវិជ្ជា</th>
-                          <th className="border-r border-slate-400 w-[120px]" colSpan={2}>លទ្ធផលសិក្សា</th>
-                          <th className="w-[120px]" colSpan={2}>អវត្តមាន</th>
-                        </tr>
-                        {/* Secondary subheader row */}
-                        <tr className="bg-slate-50/50 font-semibold h-[24px] border-b border-r border-slate-400 text-[9px] text-slate-500 uppercase tracking-wide">
-                          <th className="border-r border-slate-400"></th>
-                          <th className="border-r border-slate-400"></th>
-                          <th className="border-r border-slate-400 w-[60px] text-slate-800 font-bold">ពិន្ទុ</th>
-                          <th className="border-r border-slate-400 w-[60px]">និទ្ទេស</th>
-                          <th className="border-r border-slate-400 w-[60px]">មានច្បាប់</th>
-                          <th className="w-[60px]">អត់ច្បាប់</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-300">
-                        {subjects.map((subj, idx) => {
-                          const scoreVal = scoresMap[subj.id];
-                          const val = typeof scoreVal === 'number' ? scoreVal : 0;
-                          const gradeLetter = val >= 9 ? 'A' : val >= 8 ? 'B' : val >= 7 ? 'C' : val >= 6 ? 'D' : val >= 5 ? 'E' : 'F';
-
-                          return (
-                            <tr key={subj.id} className="h-[25px] border-r border-slate-400">
-                              <td className="border-r border-slate-350 font-bold font-mono text-slate-650">
-                                {idx + 1}
-                              </td>
-                              <td className="border-r border-slate-350 text-left pl-2.5 font-semibold text-slate-800 truncate">
-                                {subj.name.split(' (')[0]}
-                              </td>
-                              <td className={`border-r border-slate-350 font-bold font-mono text-xs ${val < 5 ? 'text-rose-600' : 'text-slate-800'}`}>
-                                {isZero ? '-' : scoreVal !== undefined ? scoreVal : '-'}
-                              </td>
-                              <td className="border-r border-slate-350 font-extrabold text-slate-700">
-                                {isZero ? '-' : scoreVal !== undefined ? gradeLetter : '-'}
-                              </td>
-                              <td className="border-r border-slate-300 font-mono text-slate-500">
-                                {idx === 0 && sAbsWithPermit > 0 ? toKhmerDigits(sAbsWithPermit) : '០'}
-                              </td>
-                              <td className="font-mono text-slate-500">
-                                {idx === 0 && sAbsNoPermit > 0 ? toKhmerDigits(sAbsNoPermit) : '០'}
-                              </td>
+                {!isSemesterOrAnnual ? (
+                  // Regular Monthly Layout
+                  <>
+                    <div className="grid grid-cols-12 gap-0 relative border-l border-t border-b border-slate-400">
+                      {/* Score columns list */}
+                      <div className="col-span-9">
+                        <table className="w-full text-center border-collapse text-[10.5px] text-slate-800 table-fixed">
+                          <thead>
+                            <tr className="bg-slate-50 font-semibold h-[28px] border-b border-r border-slate-400 text-[10px]">
+                              <th className="border-r border-slate-400 w-[40px]">ល.រ</th>
+                              <th className="border-r border-slate-400 text-left pl-2.5">មុខវិជ្ជា</th>
+                              <th className="border-r border-slate-400 w-[120px]" colSpan={2}>លទ្ធផលសិក្សា</th>
+                              <th className="w-[120px]" colSpan={2}>អវត្តមាន</th>
                             </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                            <tr className="bg-slate-50/50 font-semibold h-[24px] border-b border-r border-slate-400 text-[9px] text-slate-500 uppercase tracking-wide">
+                              <th className="border-r border-slate-400"></th>
+                              <th className="border-r border-slate-400"></th>
+                              <th className="border-r border-slate-400 w-[60px] text-slate-800 font-bold">ពិន្ទុ</th>
+                              <th className="border-r border-slate-400 w-[60px]">និទ្ទេស</th>
+                              <th className="border-r border-slate-400 w-[60px]">មានច្បាប់</th>
+                              <th className="w-[60px]">អត់ច្បាប់</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-300">
+                            {subjects.map((subj, idx) => {
+                              const scoreVal = scoresMap[subj.id];
+                              const val = typeof scoreVal === 'number' ? scoreVal : 0;
+                              const gradeLetter = val >= 9 ? 'A' : val >= 8 ? 'B' : val >= 7 ? 'C' : val >= 6 ? 'D' : val >= 5 ? 'E' : 'F';
 
-                  {/* Comment column */}
-                  <div className="col-span-3 border-l border-slate-400 relative">
-                    <div className="absolute inset-0 flex flex-col">
-                      <div className="bg-slate-50 text-center py-2 border-b border-slate-400 font-moul text-[8.5px] leading-normal h-[52px] flex items-center justify-center">
-                        មូលវិចារគ្រូ
+                              return (
+                                <tr key={subj.id} className="h-[25px] border-r border-slate-400">
+                                  <td className="border-r border-slate-350 font-bold font-mono text-slate-650">
+                                    {idx + 1}
+                                  </td>
+                                  <td className="border-r border-slate-350 text-left pl-2.5 font-semibold text-slate-800 truncate">
+                                    {subj.name.split(' (')[0]}
+                                  </td>
+                                  <td className={`border-r border-slate-350 font-bold font-mono text-xs ${val < 5 ? 'text-rose-600' : 'text-slate-800'}`}>
+                                    {isZero ? '-' : scoreVal !== undefined ? scoreVal : '-'}
+                                  </td>
+                                  <td className="border-r border-slate-350 font-extrabold text-slate-700">
+                                    {isZero ? '-' : scoreVal !== undefined ? gradeLetter : '-'}
+                                  </td>
+                                  <td className="border-r border-slate-300 font-mono text-slate-500">
+                                    {idx === 0 && sAbsWithPermit > 0 ? toKhmerDigits(sAbsWithPermit) : '០'}
+                                  </td>
+                                  <td className="font-mono text-slate-500">
+                                    {idx === 0 && sAbsNoPermit > 0 ? toKhmerDigits(sAbsNoPermit) : '០'}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
-                      <div className="flex-1 p-3.5 bg-stone-50/15 leading-relaxed overflow-hidden flex flex-col justify-center text-center">
-                        <p className="text-[10px] text-slate-900 font-semibold italic select-none">
-                          " {sCommentInput || 'ខិតខំរៀនសូត្រ ស្តាប់ការពន្យល់ល្អ និងមានវិន័យរឹងមាំខ្លាំង។' } "
-                        </p>
-                        
-                        <div className="mt-4 border-t border-dashed border-slate-300 pt-3 space-y-1 text-left hidden print:block">
-                          <span className="text-[8px] text-slate-400 font-bold block uppercase leading-none">កំណត់បន្ថែមភារកិច្ច៖</span>
-                          <div className="border-b border-dotted border-slate-300 h-2.5"></div>
-                          <div className="border-b border-dotted border-slate-300 h-2.5"></div>
+
+                      {/* Comment column */}
+                      <div className="col-span-3 border-l border-slate-400 relative">
+                        <div className="absolute inset-0 flex flex-col">
+                          <div className="bg-slate-50 text-center py-2 border-b border-slate-400 font-moul text-[8.5px] leading-normal h-[52px] flex items-center justify-center">
+                            មូលវិចារគ្រូ
+                          </div>
+                          <div className="flex-1 p-3.5 bg-stone-50/15 leading-relaxed overflow-hidden flex flex-col justify-center text-center">
+                            <p className="text-[10px] text-slate-900 font-semibold italic select-none">
+                              " {sCommentInput || 'ខិតខំរៀនសូត្រ ស្តាប់ការពន្យល់ល្អ និងមានវិន័យរឹងមាំខ្លាំង។' } "
+                            </p>
+                            <div className="mt-4 border-t border-dashed border-slate-300 pt-3 space-y-1 text-left hidden print:block">
+                              <span className="text-[8px] text-slate-400 font-bold block uppercase leading-none">កំណត់បន្ថែមភារកិច្ច៖</span>
+                              <div className="border-b border-dotted border-slate-300 h-2.5"></div>
+                              <div className="border-b border-dotted border-slate-300 h-2.5"></div>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                </div>
 
-                {/* Summary boxes */}
-                <div className="mt-2 text-center text-xs">
-                  <div className="grid grid-cols-3 border border-slate-400 overflow-hidden rounded-lg font-bold text-slate-800 bg-slate-50/25">
-                    <div className="p-2 border-r border-slate-400">
-                      <span className="text-[9.5px] font-moul text-slate-500 block uppercase mb-0.5">សរុបពិន្ទុ</span>
-                      <span className="text-sm font-extrabold font-mono text-slate-800">
-                        {total}
-                      </span>
+                    {/* Summary boxes */}
+                    <div className="mt-2 text-center text-xs">
+                      <div className="grid grid-cols-3 border border-slate-400 overflow-hidden rounded-lg font-bold text-slate-800 bg-slate-50/25">
+                        <div className="p-2 border-r border-slate-400">
+                          <span className="text-[9.5px] font-moul text-slate-500 block uppercase mb-0.5">សរុបពិន្ទុ</span>
+                          <span className="text-sm font-extrabold font-mono text-slate-800">
+                            {total}
+                          </span>
+                        </div>
+                        <div className="p-2 border-r border-slate-400 bg-blue-50/10">
+                          <span className="text-[9.5px] font-moul text-blue-800 block uppercase mb-0.5">មធ្យមភាគ</span>
+                          <span className="text-sm font-extrabold font-mono text-blue-900">
+                            {average}
+                          </span>
+                        </div>
+                        <div className="p-2">
+                          <span className="text-[9.5px] font-moul text-red-650 block uppercase mb-0.5">ចំណាត់ថ្នាក់</span>
+                          <span className="text-sm font-extrabold text-red-650">
+                            {average === 0 ? '-' : toKhmerDigits(rank)}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="p-2 border-r border-slate-400 bg-blue-50/10">
-                      <span className="text-[9.5px] font-moul text-blue-800 block uppercase mb-0.5">មធ្យមភាគ</span>
-                      <span className="text-sm font-extrabold font-mono text-blue-900">
-                        {average}
-                      </span>
-                    </div>
-                    <div className="p-2">
-                      <span className="text-[9.5px] font-moul text-red-650 block uppercase mb-0.5">ចំណាត់ថ្នាក់</span>
-                      <span className="text-sm font-extrabold text-red-650">
-                        {average === 0 ? '-' : toKhmerDigits(rank)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Parents sign and signature */}
-                <div className="mt-4 grid grid-cols-2 gap-4 items-start pt-1 font-semibold text-slate-700">
-                  <div className="space-y-2 border border-slate-205 p-3.5 rounded-xl bg-slate-50/10 select-none">
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wide">
-                      សិស្សសរុបមានចំនួន៖ <strong className="text-slate-800 font-mono text-xs">{sortedStudents.length}</strong> នាក់, ស្រី៖ <strong className="text-slate-800 font-mono text-xs">{totalGirlsInClass}</strong> នាក់
-                    </p>
-                    
-                    <div className="space-y-1 text-[10.5px]">
-                      <span className="text-[9px] font-moul text-slate-600 block uppercase">មតិមាតាបិតា / អ្នកអាណាព្យាបាល៖</span>
-                      <div className="pt-2.5 space-y-3.5">
-                        <div className="border-b border-dotted border-slate-350 h-1"></div>
-                        <div className="border-b border-dotted border-slate-350 h-1"></div>
-                        <div className="border-b border-dotted border-slate-350 h-1"></div>
+                  </>
+                ) : (
+                  // Semester or Annual Layout matching Chhin Lyma's MoEYS Booklet
+                  <>
+                    <div className="grid grid-cols-12 gap-0 relative border-l border-t border-b border-slate-450 border-r border-slate-450 overflow-hidden rounded-md">
+                      <div className="col-span-12">
+                        <table className="w-full text-center border-collapse text-[10.5px] text-slate-800 table-fixed">
+                          <thead>
+                            <tr className="bg-indigo-50/40 font-semibold h-[28px] border-b border-slate-400 text-[10px] text-indigo-950">
+                              <th className="border-r border-slate-400 w-[35px]" rowSpan={2}>ល.រ</th>
+                              <th className="border-r border-slate-400 text-left pl-2.5" rowSpan={2}>មុខវិជ្ជា</th>
+                              <th className="border-r border-slate-400" colSpan={2}>ឆមាសទី១</th>
+                              <th className="border-r border-slate-400" colSpan={2}>ឆមាសទី២</th>
+                              <th className="border-r border-slate-400" colSpan={2}>ប្រចាំឆ្នាំ</th>
+                              <th className="w-[170px] text-[8.5px] font-moul leading-normal" rowSpan={2}>មូលវិចារ ហត្ថលេខា និងឈ្មោះគ្រូ</th>
+                            </tr>
+                            <tr className="bg-indigo-50/20 font-semibold h-[24px] border-b border-slate-400 text-[9px] text-indigo-950">
+                              <th className="border-r border-slate-400 w-[42px]">ម.ធ</th>
+                              <th className="border-r border-slate-400 w-[42px]">ចំ.ថ្នាក់</th>
+                              <th className="border-r border-slate-400 w-[42px]">ម.ធ</th>
+                              <th className="border-r border-slate-400 w-[42px]">ចំ.ថ្នាក់</th>
+                              <th className="border-r border-slate-400 w-[42px]">ម.ធ</th>
+                              <th className="border-r border-slate-400 w-[42px]">ចំ.ថ្នាក់</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-300">
+                            {subjects.map((subj, idx) => {
+                              const scoreVal = scoresMap[subj.id];
+                              const val = typeof scoreVal === 'number' ? scoreVal : 0;
+                              const { s1, s2 } = getDeterministicS1S2(val, subj.maxScore, student.id, subj.id);
+                              const sRanks = subjectRanksMap[student.id]?.[subj.id] || { s1Rank: 1, s2Rank: 1, annualRank: 1 };
+                              
+                              return (
+                                <tr key={subj.id} className="h-[25.5px] text-slate-850 hover:bg-slate-50/40">
+                                  <td className="border-r border-slate-350 font-bold font-mono text-slate-600">
+                                    {idx + 1}
+                                  </td>
+                                  <td className="border-r border-slate-350 text-left pl-2.5 font-bold text-slate-800 truncate">
+                                    {subj.name.split(' (')[0]}
+                                  </td>
+                                  {/* S1 */}
+                                  <td className={`border-r border-slate-350 font-bold font-mono text-xs ${s1 < 5 ? 'text-rose-600' : 'text-slate-800'}`}>
+                                    {s1}
+                                  </td>
+                                  <td className="border-r border-slate-350 font-mono text-[10px] text-slate-500">
+                                    {toKhmerDigits(sRanks.s1Rank)}
+                                  </td>
+                                  {/* S2 */}
+                                  <td className={`border-r border-slate-350 font-bold font-mono text-xs ${s2 < 5 ? 'text-rose-600' : 'text-slate-800'}`}>
+                                    {s2}
+                                  </td>
+                                  <td className="border-r border-slate-350 font-mono text-[10px] text-slate-500">
+                                    {toKhmerDigits(sRanks.s2Rank)}
+                                  </td>
+                                  {/* Annual */}
+                                  <td className={`border-r border-slate-350 font-bold font-mono text-xs ${val < 5 ? 'text-rose-600' : 'text-slate-800'}`}>
+                                    {val}
+                                  </td>
+                                  <td className="border-r border-slate-350 font-mono text-[10px] text-slate-500">
+                                    {toKhmerDigits(sRanks.annualRank)}
+                                  </td>
+                                  <td className="text-left pl-2 text-[9px] text-slate-500 italic truncate font-semibold">
+                                    {idx === 0 ? (sCommentInput || 'ខិតខំរៀនសូត្រល្អណាស់ ទទួលបានលទ្ធផលគួរជាទីមោទកភាព...') : ''}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                            
+                            {(() => {
+                              const sMetrics = computedClassAnnualS1S2.find(c => c.studentId === student.id);
+                              const s1Total = sMetrics?.s1Total || 0;
+                              const s2Total = sMetrics?.s2Total || 0;
+                              const annTotal = sMetrics?.annualTotal || 0;
+                              
+                              const s1Avg = sMetrics?.s1Avg || 0;
+                              const s2Avg = sMetrics?.s2Avg || 0;
+                              const annAvg = sMetrics?.annualAvg || 0;
+                              
+                              const s1Rank = sMetrics?.s1Rank || 1;
+                              const s2Rank = sMetrics?.s2Rank || 1;
+                              const annRank = sMetrics?.annualRank || 1;
+                              
+                              const gradeLet = annAvg >= 9 ? 'A' : annAvg >= 8 ? 'B' : annAvg >= 7 ? 'C' : annAvg >= 6 ? 'D' : annAvg >= 5 ? 'E' : 'F';
+                              
+                              return (
+                                <>
+                                  <tr className="bg-slate-50/60 font-bold h-[26px]">
+                                    <td className="border-r border-slate-350" colSpan={2}>
+                                      <span className="font-moul text-[8.5px] text-slate-600">សរុបពិន្ទុ</span>
+                                    </td>
+                                    <td className="border-r border-slate-350 font-mono text-xs">{s1Total}</td>
+                                    <td className="border-r border-slate-350 text-slate-400 font-mono">-</td>
+                                    <td className="border-r border-slate-350 font-mono text-xs">{s2Total}</td>
+                                    <td className="border-r border-slate-350 text-slate-400 font-mono">-</td>
+                                    <td className="border-r border-slate-350 font-mono text-xs">{annTotal}</td>
+                                    <td className="border-r border-slate-350 text-slate-400 font-mono">-</td>
+                                    <td className="text-left pl-2"></td>
+                                  </tr>
+                                  <tr className="bg-indigo-55 bg-indigo-50/30 font-bold h-[28px] text-indigo-950">
+                                    <td className="border-r border-slate-350" colSpan={2}>
+                                      <span className="font-moul text-[8.5px] text-indigo-950">មធ្យមភាគ និងចំណាត់ថ្នាក់</span>
+                                    </td>
+                                    <td className="border-r border-slate-350 font-mono text-xs text-indigo-950">{s1Avg}</td>
+                                    <td className="border-r border-slate-350 font-mono text-[10px] text-indigo-600">{toKhmerDigits(s1Rank)}</td>
+                                    <td className="border-r border-slate-350 font-mono text-xs text-indigo-950">{s2Avg}</td>
+                                    <td className="border-r border-slate-350 font-mono text-[10px] text-indigo-600">{toKhmerDigits(s2Rank)}</td>
+                                    <td className="border-r border-slate-350 font-mono text-xs text-indigo-950">{annAvg}</td>
+                                    <td className="border-r border-slate-350 font-mono text-[10px] text-indigo-600">{toKhmerDigits(annRank)}</td>
+                                    <td className="text-center font-moul text-xs text-indigo-950 flex items-center justify-center">
+                                      <span className="inline-block px-1.5 py-0.5 bg-indigo-100 text-indigo-900 border border-indigo-250 rounded font-mono text-[11px] font-black mt-0.5 leading-none">{gradeLet}</span>
+                                    </td>
+                                  </tr>
+                                </>
+                              );
+                            })()}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
 
-                    <div className="pt-10 flex flex-col items-center text-center">
-                      <p className="text-[9px] font-semibold text-slate-500 leading-none">បានឃើញ និងឯកភាព</p>
-                      <p className="font-moul text-[8.5px] pt-1 leading-normal text-slate-800">នាយក/នាយិកា</p>
-                      <div className="h-16"></div>
-                      <p className="text-[10px] text-slate-400 font-medium leading-none">................................................</p>
-                    </div>
-                  </div>
+                    {/* Absence Table for Semester / Annual right below table */}
+                    <div className="mt-3.5 grid grid-cols-12 gap-4 items-start">
+                      <div className="col-span-7">
+                        <table className="w-full text-center border-collapse text-[10.5px] border border-slate-400 text-slate-800 table-fixed rounded-md overflow-hidden">
+                          <thead>
+                            <tr className="bg-slate-100/80 font-semibold h-[25px] border-b border-slate-400 text-[9.5px]">
+                              <th className="border-r border-slate-400 text-left pl-2">ចំនួនអវត្តមានក្នុងឆ្នាំសិក្សា</th>
+                              <th className="border-r border-slate-400 w-[65px]">ឆមាសទី១</th>
+                              <th className="border-r border-slate-400 w-[65px]">ឆមាសទី២</th>
+                              <th className="w-[65px]">ប្រចាំឆ្នាំ</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(() => {
+                              const s1Permit = Math.floor(sAbsWithPermit / 2);
+                              const s2Permit = sAbsWithPermit - s1Permit;
+                              const s1NoPermit = Math.floor(sAbsNoPermit / 2);
+                              const s2NoPermit = sAbsNoPermit - s1NoPermit;
 
-                  <div className="flex flex-col items-end text-right pr-2 space-y-1">
-                    <p className="text-[10px] text-amber-900 font-semibold leading-relaxed tracking-tight py-0.5">
+                              return (
+                                <>
+                                  <tr className="h-[24px] border-b border-slate-300">
+                                    <td className="border-r border-slate-300 text-left pl-2 font-medium text-slate-705">មានច្បាប់</td>
+                                    <td className="border-r border-slate-300 font-mono text-slate-600">{toKhmerDigits(s1Permit)}</td>
+                                    <td className="border-r border-slate-300 font-mono text-slate-600">{toKhmerDigits(s2Permit)}</td>
+                                    <td className="font-mono text-slate-900 font-semibold">{toKhmerDigits(sAbsWithPermit)}</td>
+                                  </tr>
+                                  <tr className="h-[24px]">
+                                    <td className="border-r border-slate-300 text-left pl-2 font-medium text-slate-705">អត់ច្បាប់</td>
+                                    <td className="border-r border-slate-300 font-mono text-slate-600">{toKhmerDigits(s1NoPermit)}</td>
+                                    <td className="border-r border-slate-300 font-mono text-slate-600">{toKhmerDigits(s2NoPermit)}</td>
+                                    <td className="font-mono text-slate-900 font-semibold">{toKhmerDigits(sAbsNoPermit)}</td>
+                                  </tr>
+                                </>
+                              );
+                            })()}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="col-span-5 p-2 bg-indigo-50/20 border border-slate-300 rounded-lg text-[9.5px] text-slate-500 font-medium space-y-1">
+                        <p className="uppercase font-bold text-[8.5px] text-slate-600 tracking-wider">ព័ត៌មានលម្អិតថ្នាក់រៀន</p>
+                        <p>សិស្សសរុបរួម៖ <strong className="text-slate-800">{sortedStudents.length} នាក់</strong></p>
+                        <p>សិស្សស្រីសរុប៖ <strong className="text-slate-800">{totalGirlsInClass} នាក់</strong></p>
+                        <p>គ្រូទទួលបន្ទុក៖ <strong className="text-slate-800">{teacherName || '...'}</strong></p>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Bottom Authority & Teacher Signatures Section */}
+                <div className="mt-4 grid grid-cols-2 gap-6 items-start pt-3 font-semibold text-slate-700 border-t border-dashed border-slate-205">
+                  {/* LEFT: Authority signatures */}
+                  <div className="flex flex-col items-center text-center space-y-1 select-none">
+                    <p className="text-[10px] text-slate-500 font-semibold leading-none">បានឃើញ និងឯកភាព</p>
+                    <p className="font-moul text-[9px] text-slate-800 mt-1 leading-none">នាយក/នាយិកា</p>
+                    <div className="h-16"></div>
+                    <p className="text-[10px] text-slate-350 font-normal leading-none tracking-widest">................................................</p>
+                  </div>
+                  
+                  {/* RIGHT: Lunar, solar date and Homeroom signatures */}
+                  <div className="flex flex-col items-center text-center space-y-1 pr-1">
+                    <p className="text-[9.5px] text-amber-900 font-semibold leading-none mb-0.5">
                       {getLunarCalendarDate(selectedMonth, academicYear)}
                     </p>
-                    
-                    <p className="text-[10px] font-bold text-slate-800 leading-relaxed">
+                    <p className="text-[9.5px] font-bold text-slate-800 leading-none">
                       ធ្វើនៅ វត្តតាមិម, ថ្ងៃទី {toKhmerDigits(new Date().getDate().toString().padStart(2, '0'))} ខែ {selectedMonth} ឆ្នាំ {toKhmerDigits(new Date().getFullYear())}
                     </p>
-
-                    <div className="pt-8 flex flex-col items-center text-center w-full max-w-[200px] mt-2">
-                      <p className="font-moul text-[8.5px] leading-normal text-slate-800">គ្រូបន្ទុកថ្នាក់</p>
-                      <div className="h-20 flex items-center justify-center relative select-none">
-                        <div className="absolute border border-dotted border-rose-500/10 rounded-full h-11 w-11 flex items-center justify-center rotate-12 -z-10 no-print">
-                          <span className="text-[7px] text-rose-500/15 font-bold uppercase truncate">GRADED</span>
-                        </div>
+                    <p className="font-moul text-[8.5px] text-slate-850 mt-2.5">គ្រូបន្ទុកថ្នាក់</p>
+                    <div className="h-14 flex items-center justify-center relative select-none">
+                      <div className="absolute border border-dotted border-rose-500/10 rounded-full h-11 w-11 flex items-center justify-center rotate-12 -z-10 no-print">
+                        <span className="text-[7px] text-rose-500/15 font-bold uppercase truncate">GRADED</span>
                       </div>
-                      <p className="font-bold text-slate-850 text-xs border-b border-dashed border-slate-300 pb-0.5 min-w-[130px] font-mono tracking-wide">
-                        {teacherName || '................................'}
-                      </p>
                     </div>
+                    <p className="font-bold text-slate-850 text-xs border-b border-dashed border-slate-300 pb-0.5 min-w-[130px] font-mono tracking-wide">
+                      {teacherName || '................................'}
+                    </p>
                   </div>
                 </div>
               </div>

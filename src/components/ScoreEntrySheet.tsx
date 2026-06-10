@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Student, Subject, MonthScore } from '../types';
-import { Pencil, Sparkles, BookOpen, ChevronRight, Settings, Plus, Trash2, CheckCircle2, FileSpreadsheet, FileText, Printer } from 'lucide-react';
+import { Pencil, Sparkles, BookOpen, ChevronRight, Settings, Plus, Trash2, CheckCircle2, FileSpreadsheet, FileText, Printer, UserPlus } from 'lucide-react';
+import { computeMonthlyResults } from '../utils/calculations';
 
 interface ScoreEntrySheetProps {
   students: Student[];
@@ -16,6 +17,17 @@ interface ScoreEntrySheetProps {
   teacherName?: string;
   academicYear?: string;
   selectedMonth?: string;
+  onAddStudent?: (student: Omit<Student, 'id' | 'avatar'>) => void;
+}
+
+// Helper to determine ordinal rank suffixes standard in Cambodia (French influence)
+// 1 => 1ᵉʳ (male), 1ᵉʳᵉ (female)
+// 2 => 2ᵉ
+function getOrdinalRank(rank: number, gender: string): string {
+  if (rank === 1) {
+    return gender === 'ស្រី' ? '1ᵉʳᵉ' : '1ᵉʳ';
+  }
+  return `${rank}ᵉ`;
 }
 
 export default function ScoreEntrySheet({
@@ -32,7 +44,10 @@ export default function ScoreEntrySheet({
   teacherName = '',
   academicYear = '',
   selectedMonth = '',
+  onAddStudent,
 }: ScoreEntrySheetProps) {
+  const results = computeMonthlyResults(students, subjects, monthScores);
+
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [formScores, setFormScores] = useState<Record<string, string>>({});
   const [formComment, setFormComment] = useState('');
@@ -40,6 +55,20 @@ export default function ScoreEntrySheet({
   const [isSubjectManagerOpen, setIsSubjectManagerOpen] = useState(false);
   const [newSubjName, setNewSubjName] = useState('');
   const [newSubjMax, setNewSubjMax] = useState(10);
+
+  // Quick State variables for Register Student Dialog
+  const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
+  const [addNameKh, setAddNameKh] = useState('');
+  const [addNameEn, setAddNameEn] = useState('');
+  const [addGender, setAddGender] = useState<'ប្រុស' | 'ស្រី'>('ប្រុស');
+  const [addDob, setAddDob] = useState('2015-01-01');
+  const [addBirthPlace, setAddBirthPlace] = useState('');
+  const [addFatherName, setAddFatherName] = useState('');
+  const [addMotherName, setAddMotherName] = useState('');
+  const [addPhone, setAddPhone] = useState('');
+  const [addAddress, setAddAddress] = useState('');
+  const [addConduct, setAddConduct] = useState('ល្អណាស់');
+  const [addRemarks, setAddRemarks] = useState('');
 
   // Khmer official heading labels
   const [ministryLabel, setMinistryLabel] = useState(() => localStorage.getItem('label_ministry') || 'ក្រសួងអប់រំ យុវជន និងកីឡា');
@@ -118,6 +147,9 @@ export default function ScoreEntrySheet({
               <th>ឈ្មោះសិស្ស</th>
               <th>ភេទ</th>
               ${subjects.map(subj => `<th>${subj.name} (/${subj.maxScore})</th>`).join('')}
+              <th>ពិន្ទុសរុប</th>
+              <th>មធ្យមភាគ</th>
+              <th>ចំណាត់ថ្នាក់</th>
               <th>មតិយោបល់</th>
             </tr>
           </thead>
@@ -126,6 +158,24 @@ export default function ScoreEntrySheet({
               const studentScore = monthScores.find((e) => e.studentId === student.id);
               const scoresMap = studentScore?.scores || {};
               const comment = studentScore?.comments || '';
+              
+              const studentResult = results.find(r => r.student.id === student.id);
+              const hasScores = studentScore && Object.keys(studentScore.scores).length > 0;
+              const totalScore = hasScores && studentResult ? studentResult.total : undefined;
+              const averageScore = hasScores && studentResult ? studentResult.average : undefined;
+              const rankValue = hasScores && studentResult ? studentResult.rank : undefined;
+
+              const totalDisplay = totalScore !== undefined ? toKhmerDigits(totalScore) : '-';
+              const averageDisplay = averageScore !== undefined ? toKhmerDigits(averageScore) : '-';
+              
+              let rankDisplay = '-';
+              if (rankValue !== undefined) {
+                const ord = getOrdinalRank(rankValue, student.gender);
+                const digits = ord.match(/^\d+/) ? toKhmerDigits(ord.match(/^\d+/)![0]) : '';
+                const suffix = ord.replace(/^\d+/, '');
+                rankDisplay = `${digits}${suffix}`;
+              }
+
               return `
                 <tr>
                   <td style="text-align: center;">${idx + 1}</td>
@@ -135,6 +185,9 @@ export default function ScoreEntrySheet({
                     const val = scoresMap[subj.id];
                     return `<td style="text-align: center; font-weight: bold;">${val !== undefined ? val : '-'}</td>`;
                   }).join('')}
+                  <td style="text-align: center; font-weight: bold;">${totalDisplay}</td>
+                  <td style="text-align: center; font-weight: bold; color: #1d4ed8;">${averageDisplay}</td>
+                  <td style="text-align: center; font-weight: bold; color: #b91c1c;">${rankDisplay}</td>
                   <td>${comment}</td>
                 </tr>
               `;
@@ -245,13 +298,16 @@ export default function ScoreEntrySheet({
           គ្រូទទួលបន្ទុក៖ ${teachName}
         </div>
 
-        <table>
+         <table>
           <thead>
             <tr>
               <th style="width: 40px;">ល.រ</th>
               <th>ឈ្មោះសិស្ស</th>
               <th style="width: 50px;">ភេទ</th>
               ${subjects.map(subj => `<th>${subj.name}<br><span style="font-size: 8pt; font-weight: normal; color: #475569;">/${subj.maxScore}</span></th>`).join('')}
+              <th style="width: 70px;">ពិន្ទុសរុប</th>
+              <th style="width: 70px;">មធ្យមភាគ</th>
+              <th style="width: 75px;">ចំណាត់ថ្នាក់</th>
               <th>កំណត់ហេតុ/មតិយោបល់</th>
             </tr>
           </thead>
@@ -260,6 +316,24 @@ export default function ScoreEntrySheet({
               const studentScore = monthScores.find((e) => e.studentId === student.id);
               const scoresMap = studentScore?.scores || {};
               const comment = studentScore?.comments || '';
+
+              const studentResult = results.find(r => r.student.id === student.id);
+              const hasScores = studentScore && Object.keys(studentScore.scores).length > 0;
+              const totalScore = hasScores && studentResult ? studentResult.total : undefined;
+              const averageScore = hasScores && studentResult ? studentResult.average : undefined;
+              const rankValue = hasScores && studentResult ? studentResult.rank : undefined;
+
+              const totalDisplay = totalScore !== undefined ? toKhmerDigits(totalScore) : '-';
+              const averageDisplay = averageScore !== undefined ? toKhmerDigits(averageScore) : '-';
+              
+              let rankDisplay = '-';
+              if (rankValue !== undefined) {
+                const ord = getOrdinalRank(rankValue, student.gender);
+                const digits = ord.match(/^\d+/) ? toKhmerDigits(ord.match(/^\d+/)![0]) : '';
+                const suffix = ord.replace(/^\d+/, '');
+                rankDisplay = `<sup>${digits}</sup><span>${suffix}</span>`;
+              }
+
               return `
                 <tr>
                   <td style="text-align: center; font-family: Arial, sans-serif;">${idx + 1}</td>
@@ -270,6 +344,9 @@ export default function ScoreEntrySheet({
                     const isLow = score !== undefined && score < 5;
                     return `<td style="text-align: center; font-family: Arial, sans-serif; font-weight: bold; ${isLow ? 'color: #ef4444;' : ''}">${score !== undefined ? score : '-'}</td>`;
                   }).join('')}
+                  <td style="text-align: center; font-family: Arial, sans-serif; font-weight: bold;">${totalDisplay}</td>
+                  <td style="text-align: center; font-family: Arial, sans-serif; font-weight: bold; color: #1d4ed8;">${averageDisplay}</td>
+                  <td style="text-align: center; font-weight: bold; color: #b91c1c;">${rankDisplay}</td>
                   <td style="font-size: 8.5pt; font-style: italic; color: #4b5563;">${comment}</td>
                 </tr>
               `;
@@ -373,6 +450,45 @@ export default function ScoreEntrySheet({
     setNewSubjMax(10);
   };
 
+  const handleAddNewStudentSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addNameKh.trim() || !addNameEn.trim()) {
+      alert('សូមបំពេញឈ្មោះសិស្សទាំងអក្សរខ្មែរ និងឡាតាំង!');
+      return;
+    }
+    if (onAddStudent) {
+      onAddStudent({
+        nameKh: addNameKh.trim(),
+        nameEn: addNameEn.trim(),
+        gender: addGender,
+        dob: addDob,
+        birthPlace: addBirthPlace.trim(),
+        fatherName: addFatherName.trim(),
+        motherName: addMotherName.trim(),
+        phone: addPhone.trim(),
+        address: addAddress.trim(),
+        conduct: addConduct,
+        remarks: addRemarks.trim(),
+      });
+      
+      // Reset form states
+      setAddNameKh('');
+      setAddNameEn('');
+      setAddGender('ប្រុស');
+      setAddDob('2015-01-01');
+      setAddBirthPlace('');
+      setAddFatherName('');
+      setAddMotherName('');
+      setAddPhone('');
+      setAddAddress('');
+      setAddConduct('ល្អណាស់');
+      setAddRemarks('');
+      setIsAddStudentOpen(false);
+    } else {
+      alert('សេវាកម្មចុះឈ្មោះសិស្សមិនទាន់បានភ្ជាប់ជាមួយទំព័រនេះទេ!');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Top action bar */}
@@ -387,6 +503,15 @@ export default function ScoreEntrySheet({
         <div className="flex flex-wrap items-center gap-3">
           {/* Always visible action buttons */}
           <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setIsAddStudentOpen(true)}
+              className="flex items-center gap-1.5 py-2 px-3.5 bg-blue-750 hover:bg-blue-800 text-white rounded-lg text-xs font-bold cursor-pointer transition-all shadow-xs"
+              title="ចុះឈ្មោះសិស្សថ្មីចូលក្នុងបញ្ជី"
+            >
+              <UserPlus className="h-4 w-4" />
+              <span>ចុះឈ្មោះសិស្សថ្មី</span>
+            </button>
+
             <button
               onClick={exportToExcel}
               className="flex items-center gap-1.5 py-2 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-semibold cursor-pointer transition-all"
@@ -529,13 +654,16 @@ export default function ScoreEntrySheet({
                     <span className="text-[9px] text-slate-400 block font-normal mt-0.5">/{subj.maxScore}</span>
                   </th>
                 ))}
+                <th className="py-3 px-2 font-semibold text-center text-[11px] min-w-[75px] border-r border-slate-150 text-slate-700 bg-slate-50/85">ពិន្ទុសរុប</th>
+                <th className="py-3 px-2 font-semibold text-center text-[11px] min-w-[75px] border-r border-slate-150 text-slate-700 bg-slate-50/85">មធ្យមភាគ</th>
+                <th className="py-3 px-2 font-bold text-center text-[11px] min-w-[80px] border-r border-slate-150 text-indigo-900 bg-indigo-50/40">ចំណាត់ថ្នាក់</th>
                 <th className="py-3 px-4 text-center font-bold text-blue-800 z-10">សកម្មភាព</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
               {students.length === 0 ? (
                 <tr>
-                  <td colSpan={subjects.length + 4} className="py-12 text-center text-slate-400">
+                  <td colSpan={subjects.length + 7} className="py-12 text-center text-slate-400">
                     សូមចុះឈ្មោះសិស្សនៅក្នុង "សៀវភៅសិក្ខាគារិក" ជាមុនសិន។
                   </td>
                 </tr>
@@ -543,6 +671,12 @@ export default function ScoreEntrySheet({
                 students.map((student, index) => {
                   const studentScore = monthScores.find((e) => e.studentId === student.id);
                   const scoresMap = studentScore?.scores || {};
+                  
+                  const studentResult = results.find(r => r.student.id === student.id);
+                  const hasScores = studentScore && Object.keys(studentScore.scores).length > 0;
+                  const totalScore = hasScores && studentResult ? studentResult.total : undefined;
+                  const averageScore = hasScores && studentResult ? studentResult.average : undefined;
+                  const rankValue = hasScores && studentResult ? studentResult.rank : undefined;
                   
                   return (
                     <tr
@@ -590,6 +724,28 @@ export default function ScoreEntrySheet({
                           </td>
                         );
                       })}
+
+                      {/* Total Score */}
+                      <td className="py-3 px-2 text-center border-r border-slate-150 font-mono text-xs font-semibold text-slate-700 bg-slate-50/30">
+                        {totalScore !== undefined ? toKhmerDigits(totalScore) : <span className="text-slate-300">-</span>}
+                      </td>
+
+                      {/* Average Score */}
+                      <td className="py-3 px-2 text-center border-r border-slate-150 font-mono text-xs font-bold text-slate-800 bg-slate-50/30">
+                        {averageScore !== undefined ? toKhmerDigits(averageScore) : <span className="text-slate-300">-</span>}
+                      </td>
+
+                      {/* Rank */}
+                      <td className="py-3 px-2 text-center border-r border-slate-150 text-xs font-bold bg-indigo-50/20">
+                        {rankValue !== undefined ? (
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md ${rankValue <= 3 ? 'text-rose-600 bg-rose-50 shadow-2xs font-extrabold' : 'text-indigo-700 bg-indigo-100/50'}`}>
+                            <sup>{getOrdinalRank(rankValue, student.gender).match(/^\d+/) || ''}</sup>
+                            <span className="text-[10px]">{getOrdinalRank(rankValue, student.gender).replace(/^\d+/, '')}</span>
+                          </span>
+                        ) : (
+                          <span className="text-slate-300">-</span>
+                        )}
+                      </td>
 
                       {/* Right Action Trigger */}
                       <td className="py-2.5 px-3 text-center no-print">
@@ -674,6 +830,218 @@ export default function ScoreEntrySheet({
                 >
                   <CheckCircle2 className="h-4 w-4" />
                   <span>រក្សាទុកព័ត៌មាន</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Register New Student Modal */}
+      {isAddStudentOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in no-print font-sans">
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl overflow-hidden animate-scale-up border border-slate-150 max-h-[90vh] flex flex-col">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-indigo-750">
+                <UserPlus className="h-5 w-5 text-indigo-600" />
+                <div>
+                  <span className="text-xs text-indigo-700 font-bold uppercase tracking-wide">ប្រព័ន្ធចុះឈ្មោះ</span>
+                  <h3 className="text-lg font-bold text-slate-800">ចុះឈ្មោះសិស្សថ្មីចូលក្នុងបញ្ជីថ្នាក់</h3>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsAddStudentOpen(false)}
+                className="text-slate-400 hover:bg-slate-150 p-1.5 rounded-full transition-all text-xl font-bold leading-none"
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleAddNewStudentSubmit} className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div className="bg-indigo-50/40 border border-indigo-100 p-3 rounded-xl">
+                <p className="text-[11px] font-semibold text-indigo-900 leading-relaxed">
+                  💡 <strong>ចំណាំ៖</strong> ការចុះឈ្មោះសិស្សថ្មីនៅទីនេះ នឹងរក្សាទុកព័ត៌មានសិស្សជាស្ថាពរនៅក្នុងបញ្ជីរាយនាមសិស្សថ្នាក់រៀនដោយស្វ័យប្រវត្ត។ លោកអ្នកក៏អាចកែប្រែព័ត៌មានលម្អិតរបស់សិស្សបន្ថែមទៀតនៅក្នុងផ្ទាំង "គ្រប់គ្រងប្រវត្តិរូបសិស្ស" (Student Profiles) ផងដែរ។
+                </p>
+              </div>
+
+              {/* Group 1: Personal Info */}
+              <div>
+                <h4 className="text-xs uppercase font-extrabold text-slate-450 tracking-wider mb-2.5 flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-blue-600"></span>
+                  <span>ព័ត៌មានផ្ទាល់ខ្លួនគ្រឹះ (Core Student Info)</span>
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-slate-700">ឈ្មោះសិស្សជាភាសាខ្មែរ <span className="text-rose-600">*</span></label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="ឧ. សេង ចាន់វិរៈ"
+                      value={addNameKh}
+                      onChange={(e) => setAddNameKh(e.target.value)}
+                      className="w-full px-3 py-2 text-xs border border-slate-250 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-slate-700 font-semibold"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-slate-700">ឈ្មោះសិស្សជាអក្សរឡាតាំង <span className="text-rose-600">*</span></label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="ឧ. SENG CHANVIRAK"
+                      value={addNameEn}
+                      onChange={(e) => setAddNameEn(e.target.value)}
+                      className="w-full px-3 py-2 text-xs border border-slate-250 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-slate-700 font-semibold uppercase font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Group 2: Gender & DOB / Contact */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-700">ភេទ <span className="text-rose-600">*</span></label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAddGender('ប្រុស')}
+                      className={`flex-1 py-1.5 border rounded-lg text-xs font-bold transition-all ${
+                        addGender === 'ប្រុស'
+                          ? 'bg-blue-50 border-blue-400 text-blue-700 ring-2 ring-blue-100'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      ប្រុស (Male)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAddGender('ស្រី')}
+                      className={`flex-1 py-1.5 border rounded-lg text-xs font-bold transition-all ${
+                        addGender === 'ស្រី'
+                          ? 'bg-pink-50 border-pink-400 text-pink-700 ring-2 ring-pink-100'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      ស្រី (Female)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-slate-700">ថ្ងៃខែឆ្នាំកំណើត</label>
+                  <input
+                    type="date"
+                    value={addDob}
+                    onChange={(e) => setAddDob(e.target.value)}
+                    className="w-full px-3 py-1.5 text-xs border border-slate-250 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-slate-700 font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-slate-700">លេខទូរស័ព្ទទំនាក់ទំនង</label>
+                  <input
+                    type="tel"
+                    placeholder="ឧ. 012 345 678"
+                    value={addPhone}
+                    onChange={(e) => setAddPhone(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-slate-250 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-slate-700 font-semibold font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-slate-700">សីលធម៌ និងវិន័យ (Conduct)</label>
+                  <select
+                    value={addConduct}
+                    onChange={(e) => setAddConduct(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-slate-250 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-slate-700 font-semibold bg-white"
+                  >
+                    <option value="ល្អណាស់">ល្អណាស់ (Excellent)</option>
+                    <option value="ល្អ">ល្អ (Good)</option>
+                    <option value="មធ្យម">មធ្យម (Fair)</option>
+                    <option value="ខ្សោយ">ខ្សោយ (Needs Improvement)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1 pt-1">
+                <label className="block text-xs font-bold text-slate-700">ទីកន្លែងកំណើត</label>
+                <input
+                  type="text"
+                  placeholder="ឧ. ភូមិវត្តតាមិម ឃុំអូដំបង១ ស្រុកសង្កែ ខេត្តបាត់ដំបង"
+                  value={addBirthPlace}
+                  onChange={(e) => setAddBirthPlace(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-slate-250 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-slate-700 font-medium"
+                />
+              </div>
+
+              {/* Group 3: Family Support */}
+              <div className="pt-2">
+                <h4 className="text-xs uppercase font-extrabold text-slate-450 tracking-wider mb-2.5 flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-blue-600"></span>
+                  <span>ព័ត៌មានអាណាព្យាបាល និងអាសយដ្ឋាន (Guardians & Address)</span>
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-slate-700">ឈ្មោះឪពុក</label>
+                    <input
+                      type="text"
+                      placeholder="ឧ. សេង ម៉េងហុង"
+                      value={addFatherName}
+                      onChange={(e) => setAddFatherName(e.target.value)}
+                      className="w-full px-3 py-2 text-xs border border-slate-250 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-slate-700 font-medium"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-slate-700">ឈ្មោះម្តាយ</label>
+                    <input
+                      type="text"
+                      placeholder="ឧ. ឡាំ សំណាង"
+                      value={addMotherName}
+                      onChange={(e) => setAddMotherName(e.target.value)}
+                      className="w-full px-3 py-2 text-xs border border-slate-250 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-slate-700 font-medium"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1 pt-1">
+                <label className="block text-xs font-bold text-slate-700">អាសយដ្ឋានបច្ចុប្បន្ន</label>
+                <input
+                  type="text"
+                  placeholder="ឧ. ភូមិអូរខ្ជាយ ឃុំវត្តតាមិម ស្រុកសង្កែ"
+                  value={addAddress}
+                  onChange={(e) => setAddAddress(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-slate-250 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-slate-700 font-medium"
+                />
+              </div>
+
+              <div className="space-y-1 pt-1">
+                <label className="block text-xs font-semibold text-slate-500">កំណត់សម្គាល់ផ្សេងៗ (Remarks)</label>
+                <textarea
+                  rows={2}
+                  placeholder="ឧ. សិស្សមានជំងឺប្រចាំកាយ ឬត្រូវតាមដានពិសេស..."
+                  value={addRemarks}
+                  onChange={(e) => setAddRemarks(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-slate-250 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-slate-700"
+                />
+              </div>
+
+              {/* Sticky Action Footer inside modal */}
+              <div className="pt-4 border-t border-slate-150 flex items-center justify-end gap-3.5 bg-white sticky bottom-0">
+                <button
+                  type="button"
+                  onClick={() => setIsAddStudentOpen(false)}
+                  className="px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 rounded-lg transition-colors cursor-pointer text-xs font-semibold"
+                >
+                  បោះបង់
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg transition-colors cursor-pointer text-xs font-bold flex items-center gap-1 pb-2 shadow-xs"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>យល់ព្រមចុះឈ្មោះ</span>
                 </button>
               </div>
             </form>
@@ -815,13 +1183,16 @@ export default function ScoreEntrySheet({
                   <div className="text-[9px] text-slate-500 font-normal">/{subj.maxScore}</div>
                 </th>
               ))}
+              <th className="border border-slate-350 py-2 px-1 text-center w-[60px] bg-slate-50">ពិន្ទុសរុប</th>
+              <th className="border border-slate-350 py-2 px-1 text-center w-[60px] bg-slate-50">មធ្យមភាគ</th>
+              <th className="border border-slate-350 py-2 px-1 text-center w-[65px]">ចំណាត់ថ្នាក់</th>
               <th className="border border-slate-350 py-2 px-2 text-left">កំណត់ហេតុ/មតិយោបល់</th>
             </tr>
           </thead>
           <tbody>
             {students.length === 0 ? (
               <tr>
-                <td colSpan={subjects.length + 4} className="border border-slate-350 py-6 text-center text-slate-400">
+                <td colSpan={subjects.length + 7} className="border border-slate-350 py-6 text-center text-slate-400">
                   មិនមានព័ត៌មានសិស្សឡើយ
                 </td>
               </tr>
@@ -830,6 +1201,13 @@ export default function ScoreEntrySheet({
                 const studentScore = monthScores.find((e) => e.studentId === student.id);
                 const scoresMap = studentScore?.scores || {};
                 const comment = studentScore?.comments || '';
+
+                const studentResult = results.find(r => r.student.id === student.id);
+                const hasScores = studentScore && Object.keys(studentScore.scores).length > 0;
+                const totalScore = hasScores && studentResult ? studentResult.total : undefined;
+                const averageScore = hasScores && studentResult ? studentResult.average : undefined;
+                const rankValue = hasScores && studentResult ? studentResult.rank : undefined;
+
                 return (
                   <tr key={student.id} className="text-slate-800">
                     <td className="border border-slate-350 py-1.5 px-1 text-center font-mono">{idx + 1}</td>
@@ -847,6 +1225,22 @@ export default function ScoreEntrySheet({
                         </td>
                       );
                     })}
+                    <td className="border border-slate-350 py-1.5 px-1 text-center font-mono font-bold">
+                      {totalScore !== undefined ? toKhmerDigits(totalScore) : '-'}
+                    </td>
+                    <td className="border border-slate-350 py-1.5 px-1 text-center font-mono font-bold text-blue-900">
+                      {averageScore !== undefined ? toKhmerDigits(averageScore) : '-'}
+                    </td>
+                    <td className="border border-slate-350 py-1.5 px-1 text-center font-bold">
+                      {rankValue !== undefined ? (
+                        <span>
+                          <sup>{getOrdinalRank(rankValue, student.gender).match(/^\d+/) || ''}</sup>
+                          <span className="text-[8px]">{getOrdinalRank(rankValue, student.gender).replace(/^\d+/, '')}</span>
+                        </span>
+                      ) : (
+                        '-'
+                      )}
+                    </td>
                     <td className="border border-slate-350 py-1.5 px-2 text-[10px] italic text-slate-600">{comment || ''}</td>
                   </tr>
                 );
